@@ -19,7 +19,7 @@ export async function readRecentPlans(setsDir, window) {
     try {
       const raw = await readFile(join(setsDir, entry.name, 'set.json'), 'utf8');
       const data = JSON.parse(raw);
-      sets.push({ genere_le: data.genere_le ?? '', plan: data.plan ?? [] });
+      sets.push({ genere_le: data.genere_le ?? '', plan: Array.isArray(data.plan) ? data.plan : [] });
     } catch {
       // Carpeta sin set.json o JSON corrupto: no debe tumbar la planificación.
       continue;

@@ -56,3 +56,17 @@ test('window 0 devuelve array vacío', async () => {
   await crearSet(setsDir, 'set-a', '2026-01-01T00:00:00Z', [{ sectionType: 'divers', topicId: 't-001' }]);
   assert.deepEqual(await readRecentPlans(setsDir, 0), []);
 });
+
+test('plan como string se convierte a array vacío', async () => {
+  const setsDir = await mkdtemp(join(tmpdir(), 'hist-'));
+  await crearSet(setsDir, 'set-bad-string', '2026-01-01T00:00:00Z', 'oops');
+  const planes = await readRecentPlans(setsDir, 3);
+  assert.deepEqual(planes, [[]]);
+});
+
+test('plan como objeto se convierte a array vacío', async () => {
+  const setsDir = await mkdtemp(join(tmpdir(), 'hist-'));
+  await crearSet(setsDir, 'set-bad-object', '2026-01-01T00:00:00Z', {});
+  const planes = await readRecentPlans(setsDir, 3);
+  assert.deepEqual(planes, [[]]);
+});
