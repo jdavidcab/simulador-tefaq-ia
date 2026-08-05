@@ -105,7 +105,7 @@ import {
 test('los 8 tipos de sección están declarados', () => {
   assert.deepEqual(Object.keys(SECTION_PRESETS).sort(), [
     'annonce_publique', 'chronique', 'conversation_image', 'divers',
-    'interview', 'micro_trottoir', 'reportage', 'repondeur',
+    'interview', 'micro_trottoir', 'repondeur', 'reportage',
   ]);
 });
 
@@ -429,7 +429,7 @@ git commit -m "feat(examen): PRNG con semilla para muestreo determinista"
   - `topicsForSection(sectionType: string, catalog?) -> Array<topic>`
   - `topicById(id: string, catalog?) -> topic | undefined`
 
-**Nota sobre esta tarea:** es la única de contenido. No se listan aquí las ~150 entradas: el test de abajo **es** la especificación de aceptación y la verifica de forma mecánica. Se conservan las 59 entradas actuales de `TEFAQ_TOPICS` (copiar sus textos **literalmente** desde `backend/src/prompt.js:2-60`, asignándoles `id` `t-001`…`t-059` en su orden actual) y se redactan las nuevas a partir de `t-060` hasta cumplir los mínimos.
+**Nota sobre esta tarea:** es la única de contenido. No se listan aquí las ~150 entradas: el test de abajo **es** la especificación de aceptación y la verifica de forma mecánica. Se conservan las 57 entradas actuales de `TEFAQ_TOPICS` (copiar sus textos **literalmente** desde `backend/src/prompt.js:3-59`, asignándoles `id` `t-001`…`t-057` en su orden actual) y se redactan las nuevas a partir de `t-058` hasta cumplir los mínimos.
 
 Criterios de etiquetado:
 
@@ -491,9 +491,9 @@ test('el bloque 3 tiene al menos 40 temas de debate', () => {
   assert.ok(bloque3.size >= 40, `solo ${bloque3.size} temas de bloque 3`);
 });
 
-test('se conservan las 59 entradas originales con ids estables', () => {
-  const originales = TOPICS.filter(t => Number(t.id.slice(2)) <= 59);
-  assert.equal(originales.length, 59);
+test('se conservan las 57 entradas originales con ids estables', () => {
+  const originales = TOPICS.filter(t => Number(t.id.slice(2)) <= 57);
+  assert.equal(originales.length, 57);
   assert.equal(topicById('t-001').id, 't-001');
 });
 
@@ -526,8 +526,8 @@ export const TOPICS = [
   { id: 't-002', text: 'Un anuncio en el transporte público de Montreal (ej. metro, autobús, STM) sobre un retraso, desvío o normas de cortesía.', sections: ['annonce_publique', 'divers'] },
   { id: 't-005', text: 'Un fragmento de radio debatiendo un tema de actualidad (ej. uso de redes sociales, inflación en el supermercado, medio ambiente).', sections: ['chronique', 'interview', 'micro_trottoir'] },
   { id: 't-023', text: 'un boletín de radio sobre una nueva medida municipal de estacionamiento en Montreal', sections: ['chronique', 'reportage', 'micro_trottoir', 'divers'] },
-  // … las 59 originales copiadas literalmente desde prompt.js con ids t-001..t-059,
-  //    más las nuevas t-060… hasta cumplir los mínimos del test.
+  // … las 57 originales copiadas literalmente desde prompt.js con ids t-001..t-057,
+  //    más las nuevas t-058… hasta cumplir los mínimos del test.
 ];
 
 export function topicsForSection(sectionType, catalog = TOPICS) {

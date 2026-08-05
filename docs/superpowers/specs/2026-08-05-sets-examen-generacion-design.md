@@ -45,7 +45,7 @@ El modo entrenamiento actual debe seguir funcionando sin cambios observables. `f
 
 **Estructura del set = oficial menos el bloque 1.** Rellenar hasta 40 preguntas con ítems extra de otros tipos alteraría la mezcla de secciones, y la mezcla *es* el examen: el bloque 4 (10 preguntas rápidas) cansa distinto que el bloque 3 (audios largos). El umbral B2 se re-ancla proporcionalmente a ~21/36 y debe mostrarse siempre etiquetado como estimación (slice 3).
 
-**Catálogo de temas ampliado a ~150 entradas etiquetadas.** Un set consume 32 temas y el catálogo actual tiene 59, con solo 10-12 entradas de perfil debate/actualidad. Sin ampliación, la anti-repetición por sección es imposible más allá del segundo set — que es exactamente el problema que infló los resultados caseros.
+**Catálogo de temas ampliado a ~150 entradas etiquetadas.** Un set consume 32 temas y el catálogo actual tiene 57, con solo 10-12 entradas de perfil debate/actualidad. Sin ampliación, la anti-repetición por sección es imposible más allá del segundo set — que es exactamente el problema que infló los resultados caseros.
 
 **Los fallos de validación y los de cuota se tratan distinto.** El código actual trata cualquier fallo como fallo del proveedor y avanza en la cadena; en un pipeline de 32 ítems eso produce sets con calidad desigual e invisible. Un 429 o un timeout justifica avanzar; un transcript tres palabras fuera de rango es ruido de muestreo con `temperature: 1` y merece reintentar el mismo modelo.
 
@@ -149,7 +149,7 @@ El `id` es estable y es lo que viaja al plan y al historial. El `text` puede ree
 | `reportage` | 1 | 4 |
 | `divers` | 10 | 40 |
 
-Como un tema puede etiquetarse para varias secciones, un catálogo de ~150 entradas cubre estos mínimos con holgura. Requisito específico: **al menos 40 temas etiquetados para el bloque 3** (`chronique`, `interview`, `reportage`), que es donde el agotamiento muerde primero. Las 59 entradas actuales se conservan y se etiquetan; el resto se redacta nuevo y lo revisa el usuario antes de dar por cerrado el slice.
+Como un tema puede etiquetarse para varias secciones, un catálogo de ~150 entradas cubre estos mínimos con holgura. Requisito específico: **al menos 40 temas etiquetados para el bloque 3** (`chronique`, `interview`, `reportage`), que es donde el agotamiento muerde primero. Las 57 entradas actuales se conservan y se etiquetan; el resto se redacta nuevo y lo revisa el usuario antes de dar por cerrado el slice.
 
 ## 6. Planificador temático
 
