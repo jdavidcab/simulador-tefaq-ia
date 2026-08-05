@@ -163,6 +163,39 @@ test('no crashea si el config no trae validationRetries (queda como NaN)', async
   );
 });
 
+test('normaliza el feedback contra el correctId final, sin importar qué letra citaba el modelo', async () => {
+  const conLetraObsoleta = JSON.stringify({
+    transcript: Array.from({ length: 45 }, (_, i) => `mot${i}`).join(' '),
+    questions: [{
+      prompt: 'Quel est le message principal ?',
+      options: [
+        { id: 'A', text: 'Une première option plausible' },
+        { id: 'B', text: 'Une deuxième option plausible' },
+        { id: 'C', text: 'Une troisième option plausible' },
+        { id: 'D', text: 'Une quatrième option plausible' },
+      ],
+      correctId: 'B',
+      feedback: 'La réponse correcte est B. Le message le confirme explicitement.',
+      justification: 'mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9',
+    }],
+  });
+  const gemini = proveedorFake('gemini', [conLetraObsoleta]);
+  const generador = createItemGenerator({ gemini }, CONFIG);
+  const item = await generador.generateItem({ ...BASE, selector: ['gemini'] });
+
+  const feedback = item.questions[0].feedback;
+  const correctIdFinal = item.questions[0].correctId;
+  assert.ok(
+    !/\b[ABCD]\b/.test(feedback.replace(/^La opción [ABCD] es correcta\.\s*/, '')),
+    `no debe quedar una letra suelta fuera del prefijo canónico: "${feedback}"`,
+  );
+  assert.match(
+    feedback,
+    new RegExp(`^La opción ${correctIdFinal} es correcta\\.`),
+    'debe citar el correctId FINAL, post-barajado, no el que tenía el modelo originalmente',
+  );
+});
+
 function itemJsonMicroTrottoir({ postureCorrecta, palabras = 45 } = {}) {
   const posturas = ['totalement pour', 'pour à certaines conditions', 'totalement contre'];
   const transcript = Array.from({ length: palabras }, (_, i) => `mot${i}`).join(' ');

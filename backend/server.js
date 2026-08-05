@@ -44,39 +44,6 @@ export function temaAleatorioParaSeccion(sectionType) {
   return pool[Math.floor(Math.random() * pool.length)].text;
 }
 
-// Red de seguridad si el modelo desobedece la regla de no mencionar letras
-// en el feedback (rule 7 del prompt): reescribe a un formato canónico sin
-// letras, igual que hacía el generador anterior.
-function normalizeFeedback(feedback, correctId) {
-  const text = feedback.trim();
-  const sentences = text.split(/(?<=[.?!])\s+/);
-  const firstSentence = sentences[0] ?? '';
-  const rest = sentences.slice(1).join(' ').trim();
-
-  const looksLikeLetterAssertion = /(opci(?:ón|on)|option|respuesta|réponse|answer|correct|correcte|bonne|buena).*\b[ABCD]\b/i.test(firstSentence);
-  const reasonMatch = firstSentence.match(/\b(?:porque|car|because)\b\s*(.+?)[.?!]?$/i);
-
-  let body = text;
-  if (looksLikeLetterAssertion && reasonMatch?.[1]) {
-    body = reasonMatch[1].trim();
-    if (rest) body = `${body}. ${rest}`;
-  } else if (looksLikeLetterAssertion) {
-    body = rest;
-  }
-
-  body = body
-    .replace(/\b[Ll]as?\s+(?:opciones|options?)\s+[ABCD](?:\s*(?:y|et|and|,)\s*[ABCD])*/g, 'las otras opciones')
-    .replace(/\b[Ll]a\s+(?:opci(?:ón|on)|option|respuesta|réponse|answer)\s+[ABCD]\b/g, 'esa opción')
-    .replace(/\b[Tt]he\s+(?:option|answer)\s+[ABCD]\b/g, 'that option')
-    .trim();
-
-  if (!body) return `La opción ${correctId} es correcta según la información del anuncio.`;
-
-  body = body.charAt(0).toUpperCase() + body.slice(1);
-
-  return `La opción ${correctId} es correcta. ${body}`;
-}
-
 // El frontend de entrenamiento espera la forma plana de siempre.
 export function aplanarItem(item) {
   const question = item.questions[0];
@@ -84,7 +51,7 @@ export function aplanarItem(item) {
     prompt: question.prompt,
     options: question.options,
     correctId: question.correctId,
-    feedback: normalizeFeedback(question.feedback, question.correctId),
+    feedback: question.feedback,
     transcript: item.transcript,
   };
 }

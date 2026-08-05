@@ -30,6 +30,41 @@ function aleatorizarOpciones(question) {
   return { ...question, options: barajadas, correctId: nuevaCorrecta.id };
 }
 
+// Red de seguridad si el modelo desobedece la regla de no mencionar letras
+// en el feedback (rule 7 del prompt), o si el barajado de opciones deja
+// obsoleta una referencia de letra que el modelo escribió antes de barajar:
+// reescribe a un formato canónico sin letras, siempre contra el correctId
+// final (post-barajado).
+function normalizeFeedback(feedback, correctId) {
+  const text = feedback.trim();
+  const sentences = text.split(/(?<=[.?!])\s+/);
+  const firstSentence = sentences[0] ?? '';
+  const rest = sentences.slice(1).join(' ').trim();
+
+  const looksLikeLetterAssertion = /(opci(?:ón|on)|option|respuesta|réponse|answer|correct|correcte|bonne|buena).*\b[ABCD]\b/i.test(firstSentence);
+  const reasonMatch = firstSentence.match(/\b(?:porque|car|because)\b\s*(.+?)[.?!]?$/i);
+
+  let body = text;
+  if (looksLikeLetterAssertion && reasonMatch?.[1]) {
+    body = reasonMatch[1].trim();
+    if (rest) body = `${body}. ${rest}`;
+  } else if (looksLikeLetterAssertion) {
+    body = rest;
+  }
+
+  body = body
+    .replace(/\b[Ll]as?\s+(?:opciones|options?)\s+[ABCD](?:\s*(?:y|et|and|,)\s*[ABCD])*/g, 'las otras opciones')
+    .replace(/\b[Ll]a\s+(?:opci(?:ón|on)|option|respuesta|réponse|answer)\s+[ABCD]\b/g, 'esa opción')
+    .replace(/\b[Tt]he\s+(?:option|answer)\s+[ABCD]\b/g, 'that option')
+    .trim();
+
+  if (!body) return `La opción ${correctId} es correcta según la información del anuncio.`;
+
+  body = body.charAt(0).toUpperCase() + body.slice(1);
+
+  return `La opción ${correctId} es correcta. ${body}`;
+}
+
 // Un 429 o un timeout no mejora reintentando el mismo modelo; un fallo de
 // validación con temperature 1 casi siempre sí.
 export function esFalloDeCuotaORed(error) {
@@ -73,9 +108,13 @@ export function createItemGenerator(providers, config = DEFAULT_CONFIG) {
             });
 
             // Las opciones de micro_trottoir son fijas: barajarlas rompería el contrato.
-            const questions = sectionType === 'micro_trottoir'
+            const barajadas = sectionType === 'micro_trottoir'
               ? validado.questions
               : validado.questions.map(aleatorizarOpciones);
+            // El feedback se normaliza SIEMPRE, para todas las secciones, después
+            // de cualquier barajado -- así nunca queda una referencia de letra
+            // obsoleta o contradictoria con el correctId final.
+            const questions = barajadas.map(q => ({ ...q, feedback: normalizeFeedback(q.feedback, q.correctId) }));
 
             return { transcript: validado.transcript, questions, provider: provider.name, tentativas };
           } catch (error) {

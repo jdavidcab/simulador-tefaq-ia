@@ -23,11 +23,10 @@ test('aplana el ítem nuevo a la forma que espera el frontend de entrenamiento',
   const plano = aplanarItem(item);
   assert.equal(plano.prompt, 'Quel est le message ?');
   assert.equal(plano.correctId, 'C');
-  // normalizeFeedback (fix round 1) reescribe el feedback a su forma
-  // canónica; para un feedback ya "limpio" sin razonamiento explícito
-  // adicional, cae al texto genérico de respaldo (verificado ejecutando
-  // la función real contra este input exacto).
-  assert.equal(plano.feedback, 'La opción C es correcta según la información del anuncio.');
+  // aplanarItem ya no transforma el feedback (ver fix: normalizeFeedback se
+  // movió a itemGenerator.js para blindar también el pipeline de sets), así
+  // que aquí solo pasa el valor de entrada tal cual.
+  assert.equal(plano.feedback, 'La opción C es correcta.');
   assert.equal(plano.transcript, item.transcript);
   assert.equal(plano.options.length, 4);
   assert.deepEqual(plano.options.map(o => o.id), ['A', 'B', 'C', 'D']);
@@ -47,7 +46,7 @@ test('la forma aplanada no filtra campos internos del esquema de sets', () => {
   assert.equal(plano.tentativas, undefined);
 });
 
-test('aplanarItem normaliza el feedback si el modelo menciona una letra pese a la regla del prompt', () => {
+test('aplanarItem no transforma el feedback, ya llega normalizado desde el generador', () => {
   const item = {
     transcript: 't',
     questions: [{
@@ -59,7 +58,10 @@ test('aplanarItem normaliza el feedback si el modelo menciona una letra pese a l
     }],
   };
   const plano = aplanarItem(item);
-  assert.equal(plano.feedback, 'La opción B es correcta. El anuncio lo menciona explícitamente');
+  // La normalización (blindaje contra letras obsoletas/contradictorias en el
+  // feedback) ahora vive en itemGenerator.js:generateItem, antes de que el
+  // ítem llegue aquí -- aplanarItem solo hace pass-through.
+  assert.equal(plano.feedback, item.questions[0].feedback);
 });
 
 test('temaAleatorioParaSeccion solo elige temas etiquetados para esa sección', () => {
