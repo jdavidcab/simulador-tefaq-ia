@@ -57,8 +57,8 @@ export const TOPICS = [
   { id: 't-043', text: 'un mensaje de recursos humanos sobre formación obligatoria, beneficios o evaluación anual', sections: ['repondeur', 'divers'] },
   { id: 't-044', text: 'una entrevista de radio con un comerciante afectado por obras, inflación o falta de personal', sections: ['interview', 'chronique', 'micro_trottoir'] },
   { id: 't-045', text: 'un anuncio cultural sobre festival, museo, espectáculo cancelado o cambio de programación', sections: ['annonce_publique', 'divers'] },
-  { id: 't-046', text: 'una crónica cultural sobre cine quebequense, música local o evento comunitario', sections: ['chronique', 'divers'] },
-  { id: 't-047', text: 'una noticia deportiva local sobre cierre de instalaciones, inscripción o cambio de horario', sections: ['reportage', 'divers'] },
+  { id: 't-046', text: 'una crónica cultural sobre cine quebequense, música local o evento comunitario', sections: ['divers'] },
+  { id: 't-047', text: 'una noticia deportiva local sobre cierre de instalaciones, inscripción o cambio de horario', sections: ['divers'] },
   { id: 't-048', text: 'un aviso de biblioteca sobre préstamo vencido, actividad gratuita o sala reservada', sections: ['annonce_publique', 'repondeur', 'divers'] },
   { id: 't-049', text: 'una conversación sobre compra de auto usado, inspección mecánica o garantía', sections: ['divers'] },
   { id: 't-050', text: 'un aviso de condominio sobre asamblea, presupuesto, reparación urgente o reglas comunes', sections: ['annonce_publique', 'repondeur', 'divers'] },
@@ -68,7 +68,7 @@ export const TOPICS = [
   { id: 't-054', text: 'una conversación sobre una cita con notario, contrato de arrendamiento o documento oficial', sections: ['repondeur', 'divers'] },
   { id: 't-055', text: 'un boletín económico breve sobre precios de alimentos, tasas de interés o empleo en Quebec', sections: ['chronique', 'reportage'] },
   { id: 't-056', text: 'una opinión de radio sobre redes sociales, privacidad, inteligencia artificial o desinformación', sections: ['chronique', 'interview', 'micro_trottoir'] },
-  { id: 't-057', text: 'una entrevista breve sobre turismo regional, temporada alta o recomendaciones para visitantes', sections: ['interview', 'divers'] },
+  { id: 't-057', text: 'una entrevista breve sobre turismo regional, temporada alta o recomendaciones para visitantes', sections: ['divers'] },
 
   // ---- t-058..t-067: avisos/anuncios públicos nuevos ----
   { id: 't-058', text: 'un anuncio en la estación de metro de Montreal sobre el cierre temporal de una línea por mantenimiento', sections: ['annonce_publique', 'divers'] },
