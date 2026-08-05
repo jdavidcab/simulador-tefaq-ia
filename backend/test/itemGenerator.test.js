@@ -148,3 +148,45 @@ test('baraja las opciones y renumera correctId salvo en micro_trottoir', async (
   assert.deepEqual(item.questions[0].options.map(o => o.id), ['A', 'B', 'C', 'D']);
   assert.ok(['A', 'B', 'C', 'D'].includes(item.questions[0].correctId));
 });
+
+test('no crashea si el config no trae validationRetries (queda como NaN)', async () => {
+  const nuncaLlamado = proveedorFake('gemini', []);
+  nuncaLlamado.generate = async () => { throw new Error('no debería llamarse con maxIntentos inválido'); };
+  const generador = createItemGenerator({ gemini: nuncaLlamado }, {});
+  await assert.rejects(
+    () => generador.generateItem({ ...BASE, selector: ['gemini'] }),
+    (error) => {
+      assert.equal(error.providersTried.length, 1);
+      assert.match(error.providersTried[0].error, /sin intentos ejecutados/);
+      return true;
+    },
+  );
+});
+
+function itemJsonMicroTrottoir({ postureCorrecta, palabras = 45 } = {}) {
+  const posturas = ['totalement pour', 'pour à certaines conditions', 'totalement contre'];
+  const transcript = Array.from({ length: palabras }, (_, i) => `mot${i}`).join(' ');
+  return JSON.stringify({
+    transcript,
+    questions: [{
+      prompt: 'Quelle est la position de la personne interviewée ?',
+      options: posturas.map((text, i) => ({ id: 'ABCD'[i], text })),
+      correctId: 'ABCD'[posturas.indexOf(postureCorrecta)],
+      feedback: 'La persona expresa esta postura con matices.',
+      justification: transcript.split(' ').slice(0, 10).join(' '),
+    }],
+  });
+}
+
+test('no baraja las opciones de micro_trottoir (son fijas y en orden)', async () => {
+  const posturas = ['totalement pour', 'pour à certaines conditions', 'totalement contre'];
+  const gemini = proveedorFake('gemini', [itemJsonMicroTrottoir({ postureCorrecta: posturas[1] })]);
+  const generador = createItemGenerator({ gemini }, CONFIG);
+  const item = await generador.generateItem({
+    sectionType: 'micro_trottoir', topic: 'un tema opinable de la vida en Quebec', difficulty: 'B2',
+    posture: posturas[1], selector: ['gemini'],
+  });
+  assert.deepEqual(item.questions[0].options.map(o => o.text), posturas, 'el orden y el texto de las posturas no debe cambiar');
+  assert.deepEqual(item.questions[0].options.map(o => o.id), ['A', 'B', 'C']);
+  assert.equal(item.questions[0].correctId, 'B');
+});

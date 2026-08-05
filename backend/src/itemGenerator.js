@@ -87,7 +87,9 @@ export function createItemGenerator(providers, config = DEFAULT_CONFIG) {
 
         // Una entrada por proveedor agotado (no una por intento): refleja el
         // último fallo con el que se rindió antes de avanzar en la cadena.
-        errores.push({ provider: provider.name, error: ultimoError.message });
+        // Si el config no trae validationRetries válido, el bucle interno
+        // puede no ejecutarse ni una vez -- ultimoError sigue en null.
+        errores.push({ provider: provider.name, error: ultimoError?.message ?? 'sin intentos ejecutados (config inválido)' });
       }
 
       const error = new Error('Todos los providers de la cadena fallaron');
