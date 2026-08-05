@@ -163,8 +163,8 @@ test('no crashea si el config no trae validationRetries (queda como NaN)', async
   );
 });
 
-test('normaliza el feedback contra el correctId final, sin importar qué letra citaba el modelo', async () => {
-  const conLetraObsoleta = JSON.stringify({
+test('normaliza el feedback contra el correctId final aunque la letra aparezca en una frase posterior con elisión francesa', async () => {
+  const conElisionFrancesa = JSON.stringify({
     transcript: Array.from({ length: 45 }, (_, i) => `mot${i}`).join(' '),
     questions: [{
       prompt: 'Quel est le message principal ?',
@@ -175,25 +175,31 @@ test('normaliza el feedback contra el correctId final, sin importar qué letra c
         { id: 'D', text: 'Une quatrième option plausible' },
       ],
       correctId: 'B',
-      feedback: 'La réponse correcte est B. Le message le confirme explicitement.',
+      feedback: "Le message est clair sur ce point précis. L'option A est un distracteur partiellement vrai qui reprend un détail secondaire.",
       justification: 'mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9',
     }],
   });
-  const gemini = proveedorFake('gemini', [conLetraObsoleta]);
-  const generador = createItemGenerator({ gemini }, CONFIG);
+  const proveedor = proveedorFake('gemini', [conElisionFrancesa]);
+  const generador = createItemGenerator({ gemini: proveedor }, CONFIG);
   const item = await generador.generateItem({ ...BASE, selector: ['gemini'] });
 
   const feedback = item.questions[0].feedback;
-  const correctIdFinal = item.questions[0].correctId;
-  assert.ok(
-    !/\b[ABCD]\b/.test(feedback.replace(/^La opción [ABCD] es correcta\.\s*/, '')),
-    `no debe quedar una letra suelta fuera del prefijo canónico: "${feedback}"`,
-  );
-  assert.match(
-    feedback,
-    new RegExp(`^La opción ${correctIdFinal} es correcta\\.`),
-    'debe citar el correctId FINAL, post-barajado, no el que tenía el modelo originalmente',
-  );
+  // El propio prefijo canónico "La opción X es correcta" contiene la letra
+  // del correctId final -- eso es esperado, no una fuga. Lo que no debe
+  // aparecer es una letra FUERA de ese prefijo.
+  const sinPrefijo = feedback.replace(/^La opción [ABCD] es correcta\.?\s*/, '');
+  assert.ok(!/\b[ABCD]\b/.test(sinPrefijo), `no debe quedar ninguna letra suelta fuera del prefijo canónico, ni siquiera de una frase posterior: "${feedback}"`);
+  assert.match(feedback, new RegExp(`^La opción ${item.questions[0].correctId} es correcta`), 'debe citar el correctId FINAL, post-barajado');
+});
+
+test('conserva el razonamiento del modelo cuando el feedback no menciona ninguna letra', async () => {
+  const proveedor = proveedorFake('gemini', [itemJson({ correctId: 'A' })]);
+  const generador = createItemGenerator({ gemini: proveedor }, CONFIG);
+  const item = await generador.generateItem({ ...BASE, selector: ['gemini'] });
+
+  const feedback = item.questions[0].feedback;
+  assert.match(feedback, new RegExp(`^La opción ${item.questions[0].correctId} es correcta\\. `), 'sin letras que limpiar, debe conservar el cuerpo original con el prefijo canónico');
+  assert.ok(feedback.includes('anuncio lo dice de forma parafraseada'), 'el razonamiento original no debe perderse cuando no hay nada que limpiar');
 });
 
 function itemJsonMicroTrottoir({ postureCorrecta, palabras = 45 } = {}) {

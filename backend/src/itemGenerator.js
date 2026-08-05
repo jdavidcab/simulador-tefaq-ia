@@ -32,36 +32,19 @@ function aleatorizarOpciones(question) {
 
 // Red de seguridad si el modelo desobedece la regla de no mencionar letras
 // en el feedback (rule 7 del prompt), o si el barajado de opciones deja
-// obsoleta una referencia de letra que el modelo escribió antes de barajar:
-// reescribe a un formato canónico sin letras, siempre contra el correctId
-// final (post-barajado).
+// obsoleta una referencia de letra que el modelo escribió antes de barajar.
+// No intentamos rescatar quirúrgicamente el razonamiento del modelo si
+// menciona una letra en cualquier parte del texto (primera frase o
+// posterior, en español, francés con elisión -- "L'option A" -- o inglés):
+// preferimos perder el detalle a arriesgar una referencia obsoleta o
+// contradictoria con el correctId final tras el barajado.
 function normalizeFeedback(feedback, correctId) {
   const text = feedback.trim();
-  const sentences = text.split(/(?<=[.?!])\s+/);
-  const firstSentence = sentences[0] ?? '';
-  const rest = sentences.slice(1).join(' ').trim();
+  const fallback = `La opción ${correctId} es correcta según la información del anuncio.`;
 
-  const looksLikeLetterAssertion = /(opci(?:ón|on)|option|respuesta|réponse|answer|correct|correcte|bonne|buena).*\b[ABCD]\b/i.test(firstSentence);
-  const reasonMatch = firstSentence.match(/\b(?:porque|car|because)\b\s*(.+?)[.?!]?$/i);
+  if (!text || /\b[ABCD]\b/.test(text)) return fallback;
 
-  let body = text;
-  if (looksLikeLetterAssertion && reasonMatch?.[1]) {
-    body = reasonMatch[1].trim();
-    if (rest) body = `${body}. ${rest}`;
-  } else if (looksLikeLetterAssertion) {
-    body = rest;
-  }
-
-  body = body
-    .replace(/\b[Ll]as?\s+(?:opciones|options?)\s+[ABCD](?:\s*(?:y|et|and|,)\s*[ABCD])*/g, 'las otras opciones')
-    .replace(/\b[Ll]a\s+(?:opci(?:ón|on)|option|respuesta|réponse|answer)\s+[ABCD]\b/g, 'esa opción')
-    .replace(/\b[Tt]he\s+(?:option|answer)\s+[ABCD]\b/g, 'that option')
-    .trim();
-
-  if (!body) return `La opción ${correctId} es correcta según la información del anuncio.`;
-
-  body = body.charAt(0).toUpperCase() + body.slice(1);
-
+  const body = text.charAt(0).toUpperCase() + text.slice(1);
   return `La opción ${correctId} es correcta. ${body}`;
 }
 
