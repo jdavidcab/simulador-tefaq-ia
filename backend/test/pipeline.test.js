@@ -46,14 +46,14 @@ function generadorFake({ fallarEn = new Set(), contador = { llamadas: 0 } } = {}
   };
 }
 
-function synthFake({ fallarSiempre = false, contador = { llamadas: 0 } } = {}) {
+function synthFake({ fallarSiempre = false, fallaDeCuota = false, contador = { llamadas: 0 } } = {}) {
   return {
     contador,
     async synthToFile({ outPath }) {
       contador.llamadas += 1;
       if (fallarSiempre) {
-        const error = new Error('cuota TTS agotada');
-        error.status = 429;
+        const error = new Error(fallaDeCuota ? 'cuota TTS agotada' : 'audio corrupto o inválido');
+        if (fallaDeCuota) error.status = 429;
         throw error;
       }
       return { duree_audio_s: 42.5, voice: 'Kore', outPath };
@@ -228,4 +228,16 @@ test('el plan y las relajaciones quedan persistidos en el set', async () => {
 test('createSet rechaza formatos que este slice no genera', async () => {
   const { pipeline } = await nuevoPipeline();
   await assert.rejects(() => pipeline.createSet({ format: 'SET_STANDARD_40', seed: 1 }), /SET_STANDARD_36/);
+});
+
+test('un fallo de TTS por cuota/red detiene la corrida completa (parada limpia)', async () => {
+  const { dataDir, pipeline } = await nuevoPipeline({ synth: synthFake({ fallarSiempre: true, fallaDeCuota: true }) });
+  const set = await pipeline.createSet({ seed: 20 });
+  await pipeline.run(set.id, { maxItems: 5 });
+
+  const parcial = await readSet(dataDir, set.id);
+  const items = parcial.sections.flatMap(s => s.items);
+  const tocados = items.filter(i => i.etat === 'genere' || i.etat === 'pret').length;
+  assert.equal(tocados, 1, 'debe detenerse tras el primer fallo de cuota, sin generar texto para los demás pese a maxItems:5');
+  assert.equal(parcial.statut, 'partial');
 });

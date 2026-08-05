@@ -4,6 +4,7 @@ import { planTopics } from '../topics/planner.js';
 import { TOPICS, topicById } from '../topics/catalog.js';
 import { readRecentPlans } from '../topics/history.js';
 import { writeSet, readSet, audioDir, nuevoSetId, contarItems } from './store.js';
+import { esFalloDeCuotaORed } from '../itemGenerator.js';
 
 const FORMATO_SOPORTADO = 'SET_STANDARD_36';
 
@@ -132,14 +133,15 @@ export function createPipeline({ dataDir, generator, synth, catalog = TOPICS, co
           }
 
           // Paso 2: audio. Separado del texto para que un fallo de cuota TTS
-          // no haga perder el texto ya pagado. No rompemos el bucle entero:
-          // cada ítem es independiente, el error queda registrado para el
-          // siguiente `run()`, y `maxItems` (que sí cuenta este ítem como
-          // trabajado) sigue acotando cuánto se insiste en la misma tanda.
+          // no haga perder el texto ya pagado. Un fallo puntual (ej. audio
+          // corrupto) es independiente por ítem y el bucle sigue con el
+          // siguiente; un fallo de cuota/red (429/5xx/timeout) implica que
+          // insistir con el resto del set es inútil, así que se detiene la
+          // tanda entera en seco.
           if (item.etat === 'genere') {
             try {
               set.ledger.tts.appels += 1;
-              const relativo = join('audio', `${item.ref}.wav`);
+              const relativo = `audio/${item.ref}.wav`;
               const { duree_audio_s } = await synth.synthToFile({
                 text: item.transcript,
                 outPath: join(audioDir(dataDir, set.id), `${item.ref}.wav`),
@@ -147,11 +149,16 @@ export function createPipeline({ dataDir, generator, synth, catalog = TOPICS, co
               item.audio = relativo;
               item.duree_audio_s = duree_audio_s;
               item.etat = 'pret';
+              delete item.erreur;
               await writeSet(dataDir, set);
             } catch (error) {
               set.ledger.tts.echecs += 1;
               item.erreur = error.message;
               await writeSet(dataDir, set);
+              if (esFalloDeCuotaORed(error)) {
+                trabajados += 1;
+                break; // cuota/red agotada: parada limpia, no insistir con el resto del set
+              }
             }
           }
 
