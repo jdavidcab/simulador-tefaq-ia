@@ -97,3 +97,15 @@ test('el esquema JSON de micro_trottoir tiene tantos slots de opción como postu
   assert.equal(idsEnEsquema.length, esperadas, `el ejemplo JSON debería tener ${esperadas} slots de opción, tiene ${idsEnEsquema.length}`);
   assert.ok(!prompt.includes(`Las 4 opciones NO las eliges`), 'el encabezado no debe hardcodear "4" cuando hay 3 posturas configuradas');
 });
+
+test('micro_trottoir no menciona "4 opciones" en ningún punto del prompt', () => {
+  const prompt = buildSectionPrompt('micro_trottoir', { ...BASE, posture: MICRO_TROTTOIR_POSTURES[CONFIG.microTrottoirOptions][0] });
+  assert.ok(!/\b4\s+opci/i.test(prompt), 'el prompt de micro_trottoir no debe hablar de "4 opciones" en ningún lado');
+});
+
+test('las otras 6 secciones siguen mencionando "las 4 opciones" (sin regresión)', () => {
+  for (const sectionType of ['annonce_publique', 'repondeur', 'chronique', 'interview', 'reportage', 'divers']) {
+    const prompt = buildSectionPrompt(sectionType, BASE);
+    assert.ok(/las 4 opciones/i.test(prompt), `${sectionType} debería seguir mencionando "las 4 opciones"`);
+  }
+});

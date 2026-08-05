@@ -11,11 +11,11 @@ Las ${posturas.length} opciones NO las eliges tú: son siempre estas posturas, e
 ${posturas.map((postura, i) => `${'ABCD'[i]}) ${postura}`).join('\n')}
 El campo "correctId" debe ser la letra de la postura "${ctx.posture}".
 
-${bloquePerfil(ctx.difficulty)}
+${bloquePerfil(ctx.difficulty, true)}
 
 ${bloquePatron(ctx.pattern)}
 
-${reglasComunes(ctx)}
+${reglasComunes({ ...ctx, opcionesFijas: true })}
 
 ${esquemaJson(ctx.questionsPerAudio, posturas.length)}`;
 }

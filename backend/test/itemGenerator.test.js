@@ -217,6 +217,58 @@ function itemJsonMicroTrottoir({ postureCorrecta, palabras = 45 } = {}) {
   });
 }
 
+test('conserva razonamiento que empieza con "A" como preposición española, no como letra de opción', async () => {
+  const conPreposicion = JSON.stringify({
+    transcript: Array.from({ length: 45 }, (_, i) => `mot${i}`).join(' '),
+    questions: [{
+      prompt: 'Quel est le message principal ?',
+      options: [
+        { id: 'A', text: 'Une première option plausible' },
+        { id: 'B', text: 'Une deuxième option plausible' },
+        { id: 'C', text: 'Une troisième option plausible' },
+        { id: 'D', text: 'Une quatrième option plausible' },
+      ],
+      correctId: 'C',
+      feedback: 'A diferencia de los distractores, esta opción se apoya en un dato explícito del audio.',
+      justification: 'mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9',
+    }],
+  });
+  const proveedor = proveedorFake('gemini', [conPreposicion]);
+  const generador = createItemGenerator({ gemini: proveedor }, CONFIG);
+  const item = await generador.generateItem({ ...BASE, selector: ['gemini'] });
+
+  const feedback = item.questions[0].feedback;
+  assert.ok(feedback.includes('diferencia de los distractores'), `no debe descartar una "A" que es preposición, no letra de opción: "${feedback}"`);
+});
+
+test('descarta el razonamiento si el feedback menciona una letra con marcador "opción"/"option" aunque siga una palabra en minúscula', async () => {
+  const conMarcador = JSON.stringify({
+    transcript: Array.from({ length: 45 }, (_, i) => `mot${i}`).join(' '),
+    questions: [{
+      prompt: 'Quel est le message principal ?',
+      options: [
+        { id: 'A', text: 'Une première option plausible' },
+        { id: 'B', text: 'Une deuxième option plausible' },
+        { id: 'C', text: 'Une troisième option plausible' },
+        { id: 'D', text: 'Une quatrième option plausible' },
+      ],
+      correctId: 'D',
+      feedback: "L'option B est un distracteur partiellement vrai qui reprend un détail secondaire.",
+      justification: 'mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9',
+    }],
+  });
+  const proveedor = proveedorFake('gemini', [conMarcador]);
+  const generador = createItemGenerator({ gemini: proveedor }, CONFIG);
+  const item = await generador.generateItem({ ...BASE, selector: ['gemini'] });
+
+  const feedback = item.questions[0].feedback;
+  // No se puede fijar la letra esperada: aleatorizarOpciones() reasigna
+  // correctId tras barajar las opciones (BASE.sectionType no es
+  // micro_trottoir), así que se compara contra el correctId FINAL, como ya
+  // hace el test de elisión francesa más arriba.
+  assert.match(feedback, new RegExp(`^La opción ${item.questions[0].correctId} es correcta según lo que se dice en el audio\\.$`), `debe descartar el razonamiento pese a que "est" sigue a la letra: "${feedback}"`);
+});
+
 test('no baraja las opciones de micro_trottoir (son fijas y en orden)', async () => {
   const posturas = ['totalement pour', 'pour à certaines conditions', 'totalement contre'];
   const gemini = proveedorFake('gemini', [itemJsonMicroTrottoir({ postureCorrecta: posturas[1] })]);

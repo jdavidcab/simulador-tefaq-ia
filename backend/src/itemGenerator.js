@@ -34,15 +34,27 @@ function aleatorizarOpciones(question) {
 // en el feedback (rule 7 del prompt), o si el barajado de opciones deja
 // obsoleta una referencia de letra que el modelo escribió antes de barajar.
 // No intentamos rescatar quirúrgicamente el razonamiento del modelo si
-// menciona una letra en cualquier parte del texto (primera frase o
+// menciona una letra de opción en cualquier parte del texto (primera frase o
 // posterior, en español, francés con elisión -- "L'option A" -- o inglés):
 // preferimos perder el detalle a arriesgar una referencia obsoleta o
-// contradictoria con el correctId final tras el barajado.
+// contradictoria con el correctId final tras el barajado. Sí conservamos,
+// en cambio, casos donde la letra mayúscula NO es una referencia a una
+// opción (p. ej. "A diferencia de..." o "vitamina C").
 function normalizeFeedback(feedback, correctId) {
   const text = feedback.trim();
-  const fallback = `La opción ${correctId} es correcta según la información del anuncio.`;
+  const fallback = `La opción ${correctId} es correcta según lo que se dice en el audio.`;
 
-  if (!text || /\b[ABCD]\b/.test(text)) return fallback;
+  // Señal fuerte: "opción B" / "option A" / "L'option B" (con o sin elisión,
+  // singular o plural) -- siempre se trata como referencia a una letra, sin
+  // importar qué palabra sigue.
+  const conMarcador = /\b(?:opci[oó]n(?:es)?|l['’]?options?|options?)\s+[ABCD]\b/i.test(text);
+  // Señal débil: una letra suelta que NO continúa en una palabra en
+  // minúscula justo después. Esto distingue "es correcta la A." (letra
+  // aislada, cuenta) de "A pesar de" o "vitamina C como" (la letra sigue en
+  // una palabra, es una preposición o coincidencia, no cuenta).
+  const letraSuelta = /\b[ABCD]\b(?!\s*[a-zà-ÿ])/i.test(text);
+
+  if (!text || conMarcador || letraSuelta) return fallback;
 
   const body = text.charAt(0).toUpperCase() + text.slice(1);
   return `La opción ${correctId} es correcta. ${body}`;

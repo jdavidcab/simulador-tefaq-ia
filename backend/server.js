@@ -294,17 +294,30 @@ app.param('id', (req, res, next, id) => {
   next();
 });
 
+// Igual que getQuestionParams, pero para el body de las rutas de sets: un
+// maxItems no entero o <= 0 produciría comparaciones confusas contra
+// `trabajados` dentro del pipeline, así que lo dejamos en undefined (el
+// default de pipeline.run es Infinity) si no es un entero positivo sano.
+function normalizarMaxItems(valor) {
+  const n = Number(valor);
+  return Number.isInteger(n) && n > 0 ? n : undefined;
+}
+
 app.post('/api/sets/generate', async (req, res) => {
+  const difficulty = req.body?.difficulty ? String(req.body.difficulty).toUpperCase() : undefined;
+  if (difficulty && !VALID_DIFFICULTIES.includes(difficulty)) {
+    return res.status(400).json({ error: `Dificultad inválida: "${difficulty}". Válidas: ${VALID_DIFFICULTIES.join(', ')}` });
+  }
   try {
     const set = await pipeline.createSet({
-      difficulty: req.body?.difficulty,
+      difficulty,
       format: req.body?.format,
       pilotes: Boolean(req.body?.pilotes),
       seed: req.body?.seed,
     });
     res.status(201).json({ id: set.id, total: set.plan.length, statut: set.statut });
     // Arranca en background: el disco ya tiene el esqueleto completo.
-    pipeline.run(set.id, { maxItems: req.body?.maxItems }).catch(error => {
+    pipeline.run(set.id, { maxItems: normalizarMaxItems(req.body?.maxItems) }).catch(error => {
       console.error(`[pipeline] ${set.id} falló:`, error.message);
     });
   } catch (error) {
@@ -319,7 +332,7 @@ app.post('/api/sets/:id/resume', async (req, res) => {
   try {
     const set = await readSet(DATA_DIR, req.params.id);
     res.json({ id: set.id, ...pipeline.statusOf(set) });
-    pipeline.run(set.id, { maxItems: req.body?.maxItems }).catch(error => {
+    pipeline.run(set.id, { maxItems: normalizarMaxItems(req.body?.maxItems) }).catch(error => {
       console.error(`[pipeline] ${set.id} falló:`, error.message);
     });
   } catch (error) {

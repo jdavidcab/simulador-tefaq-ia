@@ -104,3 +104,30 @@ test('la ruta de audio también rechaza un id inválido', async () => {
     assert.equal(res.status, 400);
   });
 });
+
+test('POST /api/sets/generate rechaza una dificultad inválida con 400', async () => {
+  await conServidor(async (base) => {
+    const res = await fetch(`${base}/api/sets/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ difficulty: 'XYZ' }),
+    });
+    assert.equal(res.status, 400);
+  });
+});
+
+test('GET /api/generate-question rechaza minWords/maxWords inválidos con 400', async () => {
+  await conServidor(async (base) => {
+    const res = await fetch(`${base}/api/generate-question?minWords=abc`);
+    assert.equal(res.status, 400);
+    const data = await res.json();
+    assert.ok(typeof data.error === 'string' && data.error.length > 0);
+  });
+});
+
+test('GET /api/generate-question rechaza un provider desconocido con 400', async () => {
+  await conServidor(async (base) => {
+    const res = await fetch(`${base}/api/generate-question?provider=noexiste`);
+    assert.equal(res.status, 400);
+  });
+});
