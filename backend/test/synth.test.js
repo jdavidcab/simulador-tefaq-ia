@@ -3,7 +3,14 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { pcmToWav, wavDurationSeconds, createSynth } from '../src/audio/synth.js';
+import { pcmToWav, wavDurationSeconds, createSynth, getStableIndex } from '../src/audio/synth.js';
+
+test('getStableIndex produce un hash determinista con valores conocidos', () => {
+  assert.equal(getStableIndex('bonjour tout le monde', 3), 1);
+  assert.equal(getStableIndex('bonjour tout le monde', 5), 0);
+  assert.equal(getStableIndex('', 3), 0);
+  assert.equal(getStableIndex('a', 1), 0);
+});
 
 test('wavDurationSeconds calcula la duración desde el tamaño del PCM', () => {
   assert.equal(wavDurationSeconds(48000), 1);      // 24 kHz mono 16 bits = 48000 B/s
