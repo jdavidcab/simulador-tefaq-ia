@@ -20,8 +20,21 @@ El backend genera preguntas con una cadena de fallback configurable:
 - **Modo forzado**: `GET /api/generate-question?provider=gemini|deepseek|mimo|mimoPro` usa solo ese proveedor (sin fallback).
 - La generación acepta `minWords`, `maxWords` y `verticalScan=true|false` para controlar el largo del transcript y forzar opciones entrenables con escaneo vertical cuando esté activo.
 - La respuesta incluye el campo `provider` con el modelo que realmente generó la pregunta.
-- Los providers viven en `backend/src/providers/`, la cadena en `AUTO_CHAIN` de `backend/src/providers/index.js`, los patrones TEFAQ locales en `backend/src/tefaqPatterns.js`, y la lógica de fallback/validación en `backend/src/questionGenerator.js`.
+- Los providers viven en `backend/src/providers/`, la cadena en `AUTO_CHAIN` de `backend/src/providers/index.js`, los patrones TEFAQ locales en `backend/src/tefaqPatterns.js`, y la lógica de generación/reintentos en `backend/src/itemGenerator.js`.
 - El backend también expone `POST /api/tts` para generar el audio del transcript con `gemini-2.5-flash-preview-tts`. El audio se cachea en memoria por texto+voz. La voz se elige de forma estable a partir del transcript para que el prefetch y la reproducción usen el mismo audio, alternando entre preguntas cuando `TTS_VOICES` tiene varias opciones.
+
+## Modo Examen — generación de sets
+
+Además del modo entrenamiento (una pregunta a la vez), el backend puede generar y persistir **sets de examen completos** — 36 preguntas repartidas en las 7 secciones oficiales generables (annonce_publique, répondeur, micro-trottoir, chronique, interview, reportage, divers; conversation_image queda pendiente para una fase futura). Es un proceso de disco, sin frontend propio todavía — se opera vía HTTP.
+
+- `POST /api/sets/generate` — inicia la generación de un set nuevo (body opcional: `{ difficulty, pilotes, seed, maxItems }`). Responde de inmediato con el `id` del set y arranca la generación en segundo plano.
+- `POST /api/sets/:id/resume` — retoma un set interrumpido. Solo regenera los ítems que no hayan llegado a `pret`; nunca repite un ítem ya completado ni reasigna su tema.
+- `GET /api/sets` — lista los sets con su progreso. `GET /api/sets/:id` — el set completo. `GET /api/sets/:id/status` — solo el resumen de progreso.
+- `GET /api/sets/:id/audio/:archivo.wav` — sirve el audio de un ítem. `DELETE /api/sets/:id` — borra el set y su carpeta.
+
+Los sets viven en `backend/data/sets/<id>/` (`set.json` + `audio/*.wav`), y **no están en el repositorio** (`.gitignore`) porque cuestan cuota real de API generarlos. Un set en curso puede interrumpirse (cerrar el proceso, `Ctrl+C`) y **reanudarse** más tarde con `resume` sin perder ni repetir trabajo ya pagado — cada ítem se escribe a disco en cuanto está listo. Si la clave de TTS se agota o falla por cuota/red, la corrida se detiene limpiamente (no sigue insistiendo contra una clave muerta); otros fallos de audio, en cambio, se registran y se continúa con el siguiente ítem.
+
+El plan temático de cada set evita repetir tema dentro del propio set y, por sección, contra los últimos sets generados (ventana configurable), para no inflar los resultados de práctica con contenido repetido.
 
 ## 2. Configurar el Frontend (React/Vite)
 1. Abre otra terminal y navega a la carpeta `frontend`
