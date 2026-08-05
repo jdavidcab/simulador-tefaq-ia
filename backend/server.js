@@ -2,9 +2,15 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { createProviders, VALID_SELECTORS } from './src/providers/index.js';
-import { createQuestionGenerator } from './src/questionGenerator.js';
-import { VALID_DIFFICULTIES } from './src/prompt.js';
+import { createItemGenerator } from './src/itemGenerator.js';
+import { createSynth } from './src/audio/synth.js';
+import { createPipeline } from './src/sets/pipeline.js';
+import { listSets, readSet, deleteSet, audioDir } from './src/sets/store.js';
+import { VALID_DIFFICULTIES } from './src/prompt/profiles.js';
+import { TOPICS } from './src/topics/catalog.js';
 import { pcmToWav, getStableIndex } from './src/audio/synth.js';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 dotenv.config();
 
@@ -14,7 +20,6 @@ app.use(express.json());
 
 // Factory (crea los providers disponibles) + Bridge (cadena de fallback)
 const providers = createProviders();
-const generator = createQuestionGenerator(providers);
 const TTS_MODEL = 'gemini-2.5-flash-preview-tts';
 const TTS_VOICES = (process.env.TTS_VOICES || process.env.TTS_VOICE || 'Kore,Charon,Puck')
   .split(',')
@@ -22,6 +27,27 @@ const TTS_VOICES = (process.env.TTS_VOICES || process.env.TTS_VOICE || 'Kore,Cha
   .filter(Boolean);
 if (TTS_VOICES.length === 0) TTS_VOICES.push('Kore');
 const TTS_API_KEY = process.env.TTS_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+
+const DATA_DIR = new URL('./data/', import.meta.url).pathname;
+const generator = createItemGenerator(providers);
+const synth = createSynth({ apiKey: TTS_API_KEY, voices: TTS_VOICES });
+const pipeline = createPipeline({ dataDir: DATA_DIR, generator, synth });
+
+// El modo entrenamiento sigue usando el formato de una sola pregunta corta.
+const SECCION_ENTRENAMIENTO = 'divers';
+
+// El frontend de entrenamiento espera la forma plana de siempre.
+export function aplanarItem(item) {
+  const question = item.questions[0];
+  return {
+    prompt: question.prompt,
+    options: question.options,
+    correctId: question.correctId,
+    feedback: question.feedback,
+    transcript: item.transcript,
+  };
+}
+
 const MAX_AUDIO_CACHE = 100;
 const audioCache = new Map();
 const audioInFlight = new Map();
@@ -72,13 +98,17 @@ function generatePrefetchedQuestion(params, key) {
   if (queue.inFlight || queue.questions.length >= MAX_PREFETCHED_QUESTIONS_PER_KEY) return queue.inFlight;
 
   queue.inFlight = generator
-    .generateQuestion(params.selector, {
+    .generateItem({
+      sectionType: SECCION_ENTRENAMIENTO,
+      topic: TOPICS[Math.floor(Math.random() * TOPICS.length)].text,
+      difficulty: params.difficulty,
       minWords: params.minWords,
       maxWords: params.maxWords,
       verticalScan: params.verticalScan,
-      difficulty: params.difficulty,
+      selector: params.selector === 'auto' ? undefined : [params.selector],
     })
-    .then(question => {
+    .then(item => {
+      const question = { ...aplanarItem(item), provider: item.provider };
       if (queue.questions.length < MAX_PREFETCHED_QUESTIONS_PER_KEY) queue.questions.push(question);
       if (params.warmAudio) warmAudioCache(question.transcript);
       return question;
@@ -187,12 +217,16 @@ app.get('/api/generate-question', async (req, res) => {
   }
 
   try {
-    const question = await generator.generateQuestion(params.selector, {
+    const item = await generator.generateItem({
+      sectionType: SECCION_ENTRENAMIENTO,
+      topic: TOPICS[Math.floor(Math.random() * TOPICS.length)].text,
+      difficulty: params.difficulty,
       minWords: params.minWords,
       maxWords: params.maxWords,
       verticalScan: params.verticalScan,
-      difficulty: params.difficulty,
+      selector: params.selector === 'auto' ? undefined : [params.selector],
     });
+    const question = { ...aplanarItem(item), provider: item.provider };
     res.json({ ...question, prefetched: false });
     ensurePrefetchedQuestion(params);
   } catch (error) {
@@ -240,7 +274,85 @@ app.post('/api/tts', async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`TEFAQ Agent running on port ${PORT}`);
+app.post('/api/sets/generate', async (req, res) => {
+  try {
+    const set = await pipeline.createSet({
+      difficulty: req.body?.difficulty,
+      format: req.body?.format,
+      pilotes: Boolean(req.body?.pilotes),
+      seed: req.body?.seed,
+    });
+    res.status(201).json({ id: set.id, total: set.plan.length, statut: set.statut });
+    // Arranca en background: el disco ya tiene el esqueleto completo.
+    pipeline.run(set.id, { maxItems: req.body?.maxItems }).catch(error => {
+      console.error(`[pipeline] ${set.id} falló:`, error.message);
+    });
+  } catch (error) {
+    res.status(error.status ?? 500).json({ error: error.message });
+  }
 });
+
+app.post('/api/sets/:id/resume', async (req, res) => {
+  if (pipeline.isRunning(req.params.id)) {
+    return res.status(409).json({ error: 'El set ya está en curso' });
+  }
+  try {
+    const set = await readSet(DATA_DIR, req.params.id);
+    res.json({ id: set.id, ...pipeline.statusOf(set) });
+    pipeline.run(set.id, { maxItems: req.body?.maxItems }).catch(error => {
+      console.error(`[pipeline] ${set.id} falló:`, error.message);
+    });
+  } catch (error) {
+    res.status(error.status ?? 500).json({ error: error.message });
+  }
+});
+
+app.get('/api/sets', async (_req, res) => {
+  res.json(await listSets(DATA_DIR));
+});
+
+app.get('/api/sets/:id', async (req, res) => {
+  try {
+    res.json(await readSet(DATA_DIR, req.params.id));
+  } catch (error) {
+    res.status(error.status ?? 500).json({ error: error.message });
+  }
+});
+
+app.get('/api/sets/:id/status', async (req, res) => {
+  try {
+    const set = await readSet(DATA_DIR, req.params.id);
+    res.json({ ...pipeline.statusOf(set), enCours: pipeline.isRunning(set.id) });
+  } catch (error) {
+    res.status(error.status ?? 500).json({ error: error.message });
+  }
+});
+
+app.get('/api/sets/:id/audio/:archivo', (req, res) => {
+  if (!/^[\w-]+\.wav$/.test(req.params.archivo)) {
+    return res.status(400).json({ error: 'Nombre de audio inválido' });
+  }
+  res.sendFile(join(audioDir(DATA_DIR, req.params.id), req.params.archivo), error => {
+    if (error) res.status(404).json({ error: 'Audio no encontrado' });
+  });
+});
+
+app.delete('/api/sets/:id', async (req, res) => {
+  if (pipeline.isRunning(req.params.id)) {
+    return res.status(409).json({ error: 'No se puede borrar un set en curso' });
+  }
+  await deleteSet(DATA_DIR, req.params.id);
+  res.status(204).end();
+});
+
+const PORT = process.env.PORT || 3001;
+
+// Solo escucha si se ejecuta directamente (`node server.js`); importarlo desde
+// un test no debe abrir un puerto.
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  app.listen(PORT, () => {
+    console.log(`TEFAQ Agent running on port ${PORT}`);
+  });
+}
+
+export { app };
