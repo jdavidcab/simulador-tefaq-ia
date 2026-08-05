@@ -3,12 +3,11 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { createProviders, VALID_SELECTORS } from './src/providers/index.js';
 import { createItemGenerator } from './src/itemGenerator.js';
-import { createSynth } from './src/audio/synth.js';
+import { pcmToWav, getStableIndex, createSynth } from './src/audio/synth.js';
 import { createPipeline } from './src/sets/pipeline.js';
 import { listSets, readSet, deleteSet, audioDir } from './src/sets/store.js';
 import { VALID_DIFFICULTIES } from './src/prompt/profiles.js';
 import { TOPICS } from './src/topics/catalog.js';
-import { pcmToWav, getStableIndex } from './src/audio/synth.js';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -28,13 +27,55 @@ const TTS_VOICES = (process.env.TTS_VOICES || process.env.TTS_VOICE || 'Kore,Cha
 if (TTS_VOICES.length === 0) TTS_VOICES.push('Kore');
 const TTS_API_KEY = process.env.TTS_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
 
-const DATA_DIR = new URL('./data/', import.meta.url).pathname;
+const DATA_DIR = fileURLToPath(new URL('./data/', import.meta.url));
 const generator = createItemGenerator(providers);
 const synth = createSynth({ apiKey: TTS_API_KEY, voices: TTS_VOICES });
 const pipeline = createPipeline({ dataDir: DATA_DIR, generator, synth });
 
 // El modo entrenamiento sigue usando el formato de una sola pregunta corta.
 const SECCION_ENTRENAMIENTO = 'divers';
+
+// Elige un tema al azar entre los etiquetados para la sección pedida; si
+// ninguno calza (no debería pasar con el catálogo actual), cae al catálogo
+// completo antes que fallar.
+export function temaAleatorioParaSeccion(sectionType) {
+  const candidatos = TOPICS.filter(tema => tema.sections.includes(sectionType));
+  const pool = candidatos.length > 0 ? candidatos : TOPICS;
+  return pool[Math.floor(Math.random() * pool.length)].text;
+}
+
+// Red de seguridad si el modelo desobedece la regla de no mencionar letras
+// en el feedback (rule 7 del prompt): reescribe a un formato canónico sin
+// letras, igual que hacía el generador anterior.
+function normalizeFeedback(feedback, correctId) {
+  const text = feedback.trim();
+  const sentences = text.split(/(?<=[.?!])\s+/);
+  const firstSentence = sentences[0] ?? '';
+  const rest = sentences.slice(1).join(' ').trim();
+
+  const looksLikeLetterAssertion = /(opci(?:ón|on)|option|respuesta|réponse|answer|correct|correcte|bonne|buena).*\b[ABCD]\b/i.test(firstSentence);
+  const reasonMatch = firstSentence.match(/\b(?:porque|car|because)\b\s*(.+?)[.?!]?$/i);
+
+  let body = text;
+  if (looksLikeLetterAssertion && reasonMatch?.[1]) {
+    body = reasonMatch[1].trim();
+    if (rest) body = `${body}. ${rest}`;
+  } else if (looksLikeLetterAssertion) {
+    body = rest;
+  }
+
+  body = body
+    .replace(/\b[Ll]as?\s+(?:opciones|options?)\s+[ABCD](?:\s*(?:y|et|and|,)\s*[ABCD])*/g, 'las otras opciones')
+    .replace(/\b[Ll]a\s+(?:opci(?:ón|on)|option|respuesta|réponse|answer)\s+[ABCD]\b/g, 'esa opción')
+    .replace(/\b[Tt]he\s+(?:option|answer)\s+[ABCD]\b/g, 'that option')
+    .trim();
+
+  if (!body) return `La opción ${correctId} es correcta según la información del anuncio.`;
+
+  body = body.charAt(0).toUpperCase() + body.slice(1);
+
+  return `La opción ${correctId} es correcta. ${body}`;
+}
 
 // El frontend de entrenamiento espera la forma plana de siempre.
 export function aplanarItem(item) {
@@ -43,7 +84,7 @@ export function aplanarItem(item) {
     prompt: question.prompt,
     options: question.options,
     correctId: question.correctId,
-    feedback: question.feedback,
+    feedback: normalizeFeedback(question.feedback, question.correctId),
     transcript: item.transcript,
   };
 }
@@ -100,7 +141,7 @@ function generatePrefetchedQuestion(params, key) {
   queue.inFlight = generator
     .generateItem({
       sectionType: SECCION_ENTRENAMIENTO,
-      topic: TOPICS[Math.floor(Math.random() * TOPICS.length)].text,
+      topic: temaAleatorioParaSeccion(SECCION_ENTRENAMIENTO),
       difficulty: params.difficulty,
       minWords: params.minWords,
       maxWords: params.maxWords,
@@ -219,7 +260,7 @@ app.get('/api/generate-question', async (req, res) => {
   try {
     const item = await generator.generateItem({
       sectionType: SECCION_ENTRENAMIENTO,
-      topic: TOPICS[Math.floor(Math.random() * TOPICS.length)].text,
+      topic: temaAleatorioParaSeccion(SECCION_ENTRENAMIENTO),
       difficulty: params.difficulty,
       minWords: params.minWords,
       maxWords: params.maxWords,
@@ -274,6 +315,18 @@ app.post('/api/tts', async (req, res) => {
   }
 });
 
+// Valida el formato de :id en las 5 rutas que lo usan de una sola vez, antes
+// de que llegue a ningún handler: un id no confiable no debe tocar el
+// filesystem (ver deleteSet/readSet/audioDir, que construyen rutas con él).
+const ID_SET_VALIDO = /^set-\d{4}-\d{2}-\d{2}-[a-z0-9]{4}$/;
+
+app.param('id', (req, res, next, id) => {
+  if (!ID_SET_VALIDO.test(id)) {
+    return res.status(400).json({ error: 'id de set inválido' });
+  }
+  next();
+});
+
 app.post('/api/sets/generate', async (req, res) => {
   try {
     const set = await pipeline.createSet({
@@ -308,7 +361,11 @@ app.post('/api/sets/:id/resume', async (req, res) => {
 });
 
 app.get('/api/sets', async (_req, res) => {
-  res.json(await listSets(DATA_DIR));
+  try {
+    res.json(await listSets(DATA_DIR));
+  } catch (error) {
+    res.status(error.status ?? 500).json({ error: error.message });
+  }
 });
 
 app.get('/api/sets/:id', async (req, res) => {
@@ -341,8 +398,12 @@ app.delete('/api/sets/:id', async (req, res) => {
   if (pipeline.isRunning(req.params.id)) {
     return res.status(409).json({ error: 'No se puede borrar un set en curso' });
   }
-  await deleteSet(DATA_DIR, req.params.id);
-  res.status(204).end();
+  try {
+    await deleteSet(DATA_DIR, req.params.id);
+    res.status(204).end();
+  } catch (error) {
+    res.status(error.status ?? 500).json({ error: error.message });
+  }
 });
 
 const PORT = process.env.PORT || 3001;
