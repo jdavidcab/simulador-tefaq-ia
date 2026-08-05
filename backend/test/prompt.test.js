@@ -85,3 +85,15 @@ test('la dificultad cambia el perfil inyectado', () => {
   assert.ok(b1.includes(DIFFICULTY_PROFILES.B1.vocabulary));
   assert.ok(c1.includes(DIFFICULTY_PROFILES.C1.vocabulary));
 });
+
+test('el esquema JSON de micro_trottoir tiene tantos slots de opción como posturas configuradas', () => {
+  const prompt = buildSectionPrompt('micro_trottoir', { ...BASE, posture: MICRO_TROTTOIR_POSTURES[CONFIG.microTrottoirOptions][0] });
+  const esperadas = MICRO_TROTTOIR_POSTURES[CONFIG.microTrottoirOptions].length;
+  const coincidencias = prompt.match(/"id":\s*"[A-D]"/g) ?? [];
+  // El bloque de ejemplo JSON aparece una vez por pregunta (questionsPerAudio=1 aquí);
+  // cada slot de opción tiene un "id". Cuenta solo dentro del bloque de esquema.
+  const bloqueEsquema = prompt.slice(prompt.indexOf('Estructura JSON requerida'));
+  const idsEnEsquema = bloqueEsquema.match(/"id":\s*"[A-D]"/g) ?? [];
+  assert.equal(idsEnEsquema.length, esperadas, `el ejemplo JSON debería tener ${esperadas} slots de opción, tiene ${idsEnEsquema.length}`);
+  assert.ok(!prompt.includes(`Las 4 opciones NO las eliges`), 'el encabezado no debe hardcodear "4" cuando hay 3 posturas configuradas');
+});

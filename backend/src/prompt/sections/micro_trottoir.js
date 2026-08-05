@@ -7,7 +7,7 @@ export function build(ctx) {
 El escenario ESTA VEZ DEBE TRATAR ESTRICTAMENTE SOBRE: "${ctx.topic}".
 Una persona entrevistada en la calle da su opinión sobre el tema. Su postura debe ser EXACTAMENTE: "${ctx.posture}", expresada de forma matizada y natural, sin anunciarla literalmente.
 
-Las 4 opciones NO las eliges tú: son siempre estas posturas, en este orden exacto:
+Las ${posturas.length} opciones NO las eliges tú: son siempre estas posturas, en este orden exacto:
 ${posturas.map((postura, i) => `${'ABCD'[i]}) ${postura}`).join('\n')}
 El campo "correctId" debe ser la letra de la postura "${ctx.posture}".
 
@@ -17,5 +17,5 @@ ${bloquePatron(ctx.pattern)}
 
 ${reglasComunes(ctx)}
 
-${esquemaJson(ctx.questionsPerAudio)}`;
+${esquemaJson(ctx.questionsPerAudio, posturas.length)}`;
 }

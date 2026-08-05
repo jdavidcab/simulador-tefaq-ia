@@ -40,10 +40,12 @@ ${verticalScan
   : '15. Las opciones pueden tener estructuras variadas y naturales; no necesitas forzar un prefijo común, pero deben mantener longitud, tono y categoría semántica similares.'}`;
 }
 
-export function esquemaJson(questionsPerAudio) {
+export function esquemaJson(questionsPerAudio, optionCount = 4) {
+  const letras = ['A', 'B', 'C', 'D'].slice(0, optionCount);
+  const opcionesEjemplo = letras.map(letra => `{ "id": "${letra}", "text": "..." }`).join(', ');
   const pregunta = `{
       "prompt": "Pregunta en francés",
-      "options": [{ "id": "A", "text": "..." }, { "id": "B", "text": "..." }, { "id": "C", "text": "..." }, { "id": "D", "text": "..." }],
+      "options": [${opcionesEjemplo}],
       "correctId": "A",
       "feedback": "Explicación breve en español.",
       "justification": "cita textual del transcript"
