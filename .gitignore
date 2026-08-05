@@ -1,0 +1,16 @@
+# Secretos — nunca commitear
+.env
+.env.*
+!.env.example
+
+# Dependencias
+node_modules/
+
+# Artefactos de build
+frontend/dist/
+
+# Datos generados (sets, audio, sesiones)
+backend/data/
+
+# macOS
+.DS_Store
