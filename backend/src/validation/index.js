@@ -54,8 +54,10 @@ function validarInterview(item) {
   if (distintas.size < 2) {
     throw new Error('interview: el transcript debe ser un diálogo con al menos dos hablantes etiquetados');
   }
-  const alterna = etiquetas.some((etiqueta, i) => i > 0 && etiqueta !== etiquetas[i - 1]);
-  if (!alterna) throw new Error('interview: el transcript no muestra alternancia entre hablantes');
+  const transiciones = etiquetas.filter((etiqueta, i) => i > 0 && etiqueta !== etiquetas[i - 1]).length;
+  if (transiciones < 2) {
+    throw new Error('interview: el transcript no muestra alternancia real entre hablantes (se requieren al menos 2 cambios de turno)');
+  }
 }
 
 export function validateItem(item, sectionType, opts = {}) {

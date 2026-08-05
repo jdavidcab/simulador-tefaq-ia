@@ -48,10 +48,17 @@ test('countWords ignora espacios múltiples', () => {
   assert.equal(countWords('  un   deux trois  '), 3);
 });
 
-function dialogoInterview(numPalabras) {
+function dialogoInterview(numPalabras, turnos = 4) {
   const cuerpo = palabras(numPalabras).split(' ');
-  const mitad = Math.floor(cuerpo.length / 2);
-  return `Journaliste: ${cuerpo.slice(0, mitad).join(' ')} Invité(e): ${cuerpo.slice(mitad).join(' ')}`;
+  const porTurno = Math.floor(cuerpo.length / turnos);
+  const partes = [];
+  for (let i = 0; i < turnos; i += 1) {
+    const etiqueta = i % 2 === 0 ? 'Journaliste' : 'Invité(e)';
+    const inicio = i * porTurno;
+    const fin = i === turnos - 1 ? cuerpo.length : inicio + porTurno;
+    partes.push(`${etiqueta}: ${cuerpo.slice(inicio, fin).join(' ')}`);
+  }
+  return partes.join(' ');
 }
 
 test('aplica tolerancia proporcional: interview admite ±15 sobre 200-300', () => {
@@ -141,8 +148,34 @@ test('interview rechaza un monólogo con una sola etiqueta', () => {
   assert.throws(() => validateItem(item, 'interview'), /diálogo|alternancia/i);
 });
 
+test('interview rechaza un monólogo con una sola transición (aside incidental, no diálogo real)', () => {
+  const adversarial = `Journaliste: ${palabras(240)} Note: ${palabras(5)}`;
+  const item = { transcript: adversarial, questions: [preguntaValida(adversarial), preguntaValida(adversarial)] };
+  assert.throws(() => validateItem(item, 'interview'), /alternancia real|al menos 2 cambios/);
+});
+
 test('minWords y maxWords se pueden sobreescribir (modo entrenamiento)', () => {
   const item = itemValido('divers', 35);
   assert.throws(() => validateItem(item, 'divers'), /fuera de rango/);
   assert.doesNotThrow(() => validateItem(item, 'divers', { minWords: 30, maxWords: 50 }));
+});
+
+test('acepta exactamente en el límite inferior de tolerancia (27 palabras para annonce_publique)', () => {
+  const item = itemValido('annonce_publique', 27);
+  assert.doesNotThrow(() => validateItem(item, 'annonce_publique'));
+});
+
+test('rechaza una palabra por debajo del límite inferior de tolerancia (26 palabras)', () => {
+  const item = itemValido('annonce_publique', 26);
+  assert.throws(() => validateItem(item, 'annonce_publique'), /fuera de rango/);
+});
+
+test('acepta exactamente en el límite superior de tolerancia (63 palabras para annonce_publique)', () => {
+  const item = itemValido('annonce_publique', 63);
+  assert.doesNotThrow(() => validateItem(item, 'annonce_publique'));
+});
+
+test('rechaza una palabra por encima del límite superior de tolerancia (64 palabras)', () => {
+  const item = itemValido('annonce_publique', 64);
+  assert.throws(() => validateItem(item, 'annonce_publique'), /fuera de rango/);
 });
