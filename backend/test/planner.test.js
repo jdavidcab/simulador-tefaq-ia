@@ -1,7 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { planTopics } from '../src/topics/planner.js';
-import { CONFIG, MICRO_TROTTOIR_POSTURES } from '../src/examFormat.js';
+import {
+  CONFIG, MICRO_TROTTOIR_POSTURES, SET_COMPOSITIONS, sectionDemand,
+} from '../src/examFormat.js';
+import { topicsForSection } from '../src/topics/catalog.js';
+import { createRng, sampleWithoutReplacement } from '../src/rng.js';
 
 // Catálogo sintético: suficiente para SET_STANDARD_36 con holgura.
 function catalogoAmplio() {
@@ -78,40 +82,51 @@ test('excluye los temas usados en los sets recientes', () => {
   assert.deepEqual(segundo.relaxations, []);
 });
 
-test('sirve primero a las secciones escasas: annonce no puede vaciar el pool de divers', () => {
-  // divers (demanda 10) SOLO puede usar 10 temas compartidos.
-  // annonce_publique (demanda 4) puede usar esos mismos 10 más 4 exclusivos.
-  // El orden de composición pondría annonce primero, que robaría del pool
-  // compartido y dejaría a divers sin temas suficientes. El orden por escasez
-  // sirve divers primero (ratio 1.0 frente a 3.5) y ambas caben.
-  const compartidos = Array.from({ length: 10 }, (_, i) => ({
-    id: `t-comp${i}`, text: `compartido ${i}`, sections: ['annonce_publique', 'divers'],
-  }));
-  const exclusivosAnnonce = Array.from({ length: 4 }, (_, i) => ({
-    id: `t-excl${i}`, text: `exclusivo ${i}`, sections: ['annonce_publique'],
-  }));
+test('sirve primero a las secciones escasas por RATIO, no solo por pool bruto', () => {
+  // divers: 4 compartidos + 9 exclusivos = pool 13, demanda 10, ratio 1.3
+  // micro_trottoir: 4 compartidos + 7 exclusivos = pool 11, demanda 6, ratio 1.83
+  // Por RATIO: divers (1.3) va antes que micro (1.83) -> correcto.
+  // Por POOL BRUTO: micro (11) iría antes que divers (13) -> orden distinto.
+  // Con semilla 11, un orden por pool bruto deja a divers sin temas suficientes
+  // (verificado abajo con un simulador standalone que replica la misma lógica
+  // pero con el comparador equivocado).
+  const shared = Array.from({ length: 4 }, (_, i) => ({ id: `sh${i}`, text: `compartido ${i}`, sections: ['divers', 'micro_trottoir'] }));
+  const exclDivers = Array.from({ length: 9 }, (_, i) => ({ id: `exd${i}`, text: `divers-excl ${i}`, sections: ['divers'] }));
+  const exclMicro = Array.from({ length: 7 }, (_, i) => ({ id: `exm${i}`, text: `micro-excl ${i}`, sections: ['micro_trottoir'] }));
   const resto = [];
   let n = 0;
   for (const [seccion, cantidad] of Object.entries({
-    repondeur: 20, micro_trottoir: 20, chronique: 20, interview: 20, reportage: 20,
+    annonce_publique: 20, repondeur: 20, chronique: 20, interview: 20, reportage: 20,
   })) {
-    for (let i = 0; i < cantidad; i += 1) {
-      resto.push({ id: `t-r${n}`, text: `resto ${n}`, sections: [seccion] });
-      n += 1;
+    for (let i = 0; i < cantidad; i += 1) { resto.push({ id: `r${n}`, text: `resto ${n}`, sections: [seccion] }); n += 1; }
+  }
+  const catalog = [...shared, ...exclDivers, ...exclMicro, ...resto];
+
+  assert.doesNotThrow(() => planTopics({
+    catalog, compositionKey: 'SET_STANDARD_36', recentPlans: [], pilotes: false, config: CONFIG, seed: 11,
+  }));
+
+  // Verificación cruzada: un simulador con la MISMA lógica pero ordenando por
+  // pool bruto (el error que este test debe detectar si se reintrodujera)
+  // falla con la misma semilla y catálogo -- confirma que el orden importa.
+  function planConOrdenPorPoolBruto() {
+    const sections = SET_COMPOSITIONS.SET_STANDARD_36;
+    const demanda = sectionDemand('SET_STANDARD_36');
+    const rng = createRng(11);
+    const asignados = new Set();
+    const disponibles = (sectionType) => topicsForSection(sectionType, catalog).filter(t => !asignados.has(t.id));
+    const ordenPorPool = [...sections].sort((a, b) => disponibles(a).length - disponibles(b).length);
+    for (const sectionType of ordenPorPool) {
+      const pool = disponibles(sectionType);
+      if (pool.length < demanda[sectionType]) {
+        throw new Error(`insuficiente para "${sectionType}": ${pool.length} < ${demanda[sectionType]}`);
+      }
+      const elegidos = sampleWithoutReplacement(rng, pool, demanda[sectionType]);
+      for (const t of elegidos) asignados.add(t.id);
     }
   }
-
-  const { plan } = planTopics({
-    catalog: [...compartidos, ...exclusivosAnnonce, ...resto], ...OPCIONES_BASE,
-  });
-
-  const idsDivers = plan.filter(p => p.sectionType === 'divers').map(p => p.topicId).sort();
-  const idsAnnonce = plan.filter(p => p.sectionType === 'annonce_publique').map(p => p.topicId).sort();
-
-  assert.deepEqual(idsDivers, compartidos.map(t => t.id).sort(),
-    'divers debe quedarse con todo el pool compartido');
-  assert.deepEqual(idsAnnonce, exclusivosAnnonce.map(t => t.id).sort(),
-    'annonce debe conformarse con sus exclusivos');
+  assert.throws(planConOrdenPorPoolBruto, /insuficiente para "divers"/,
+    'con orden por pool bruto, divers debería quedarse corto -- confirma que la fixture discrimina de verdad');
 });
 
 test('relaja la ventana solo en la sección afectada y lo registra', () => {
@@ -145,6 +160,64 @@ test('relaja la ventana solo en la sección afectada y lo registra', () => {
   assert.ok(relajada, 'debería registrar la relajación de chronique');
   assert.ok(relajada.fenetre < CONFIG.historyWindow);
   assert.ok(!relaxations.some(r => r.sectionType === 'divers'), 'no debe relajar secciones sanas');
+});
+
+test('relaja la ventana solo lo necesario, no siempre hasta 0', () => {
+  // chronique: pool total de 5 temas exclusivos (c0..c4), demanda 2.
+  // Historial (más reciente primero):
+  //   set más reciente:  usa c0, c1
+  //   set penúltimo:     usa c2, c3
+  //   set antepenúltimo: usa c4
+  // window=3: bloqueados={c0,c1,c2,c3,c4} -> disponible=0 <2
+  // window=2: bloqueados={c0,c1,c2,c3}    -> disponible={c4}=1 <2
+  // window=1: bloqueados={c0,c1}          -> disponible={c2,c3,c4}=3 >=2  <-- se detiene aquí
+  const chroniqueTemas = Array.from({ length: 5 }, (_, i) => ({ id: `c${i}`, text: `chronique ${i}`, sections: ['chronique'] }));
+  const resto = [];
+  let n = 0;
+  for (const [seccion, cantidad] of Object.entries({
+    annonce_publique: 20, repondeur: 20, micro_trottoir: 20, interview: 20, reportage: 20, divers: 40,
+  })) {
+    for (let i = 0; i < cantidad; i += 1) { resto.push({ id: `r${n}`, text: `r${n}`, sections: [seccion] }); n += 1; }
+  }
+  const recentPlans = [
+    [{ sectionType: 'chronique', topicId: 'c0' }, { sectionType: 'chronique', topicId: 'c1' }],
+    [{ sectionType: 'chronique', topicId: 'c2' }, { sectionType: 'chronique', topicId: 'c3' }],
+    [{ sectionType: 'chronique', topicId: 'c4' }],
+  ];
+
+  const { relaxations } = planTopics({
+    catalog: [...chroniqueTemas, ...resto], compositionKey: 'SET_STANDARD_36',
+    recentPlans, seed: 1, pilotes: false, config: CONFIG,
+  });
+
+  const relajada = relaxations.find(r => r.sectionType === 'chronique');
+  assert.ok(relajada, 'chronique debería figurar en relaxations');
+  assert.equal(relajada.fenetre, 1, 'debe detenerse en window=1, no seguir hasta 0 innecesariamente');
+});
+
+test('si la insuficiencia es por competencia interna (sin historial), lanza limpiamente sin relajación espuria', () => {
+  // chronique y divers comparten TODO su pool (10 temas). divers (ratio 1.0)
+  // se procesa antes que chronique (ratio 5.0) y se lleva los 10, dejando a
+  // chronique sin nada -- sin que exista ningún historial de por medio.
+  const shared = Array.from({ length: 10 }, (_, i) => ({ id: `sh${i}`, text: `c${i}`, sections: ['chronique', 'divers'] }));
+  const resto = [];
+  let n = 0;
+  for (const [seccion, cantidad] of Object.entries({
+    annonce_publique: 20, repondeur: 20, micro_trottoir: 20, interview: 20, reportage: 20,
+  })) {
+    for (let i = 0; i < cantidad; i += 1) { resto.push({ id: `x${n}`, text: `x${n}`, sections: [seccion] }); n += 1; }
+  }
+
+  assert.throws(
+    () => planTopics({
+      catalog: [...shared, ...resto], compositionKey: 'SET_STANDARD_36',
+      recentPlans: [], seed: 1, pilotes: false, config: CONFIG,
+    }),
+    /Temas insuficientes para "chronique"/,
+  );
+  // La ausencia de una segunda aserción sobre `relaxations` es deliberada: al
+  // lanzar, la función nunca retorna, así que no hay objeto que inspeccionar
+  // -- eso es exactamente lo que demuestra que no hay relajación espuria.
 });
 
 test('aborta si ni con ventana 0 hay temas suficientes', () => {

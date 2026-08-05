@@ -65,6 +65,10 @@ export function planTopics({
       window -= 1;
       pool = disponibles(catalog, sectionType, recentPlans, window, asignados);
     }
+    // Si la insuficiencia es por competencia con otra sección (asignados) y no
+    // por historial, bajar window no cambia el pool y el bucle se agota sin
+    // éxito -- el error se lanza antes de llegar aquí, así que nunca se
+    // registra una relajación espuria.
     if (window < config.historyWindow) relaxations.push({ sectionType, fenetre: window });
 
     if (pool.length < demanda[sectionType]) {
