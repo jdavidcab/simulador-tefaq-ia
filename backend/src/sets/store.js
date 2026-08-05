@@ -21,7 +21,8 @@ export async function writeSet(dataDir, set) {
   const dir = setDir(dataDir, set.id);
   await mkdir(join(dir, 'audio'), { recursive: true });
   const destino = join(dir, 'set.json');
-  const temporal = `${destino}.${process.pid}.tmp`;
+  const sufijo = `${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
+  const temporal = `${destino}.${sufijo}.tmp`;
   await writeFile(temporal, JSON.stringify(set, null, 2), 'utf8');
   await rename(temporal, destino);
 }

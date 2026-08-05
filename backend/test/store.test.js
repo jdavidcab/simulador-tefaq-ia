@@ -90,3 +90,21 @@ test('nuevoSetId incluye la fecha y un sufijo aleatorio', () => {
   assert.match(id, /^set-2026-08-05-[a-z0-9]{4}$/);
   assert.notEqual(nuevoSetId(new Date('2026-08-05T10:00:00Z')), id);
 });
+
+test('dos escrituras concurrentes al mismo set no compiten por el mismo temporal', async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), 'sets-'));
+  const setA = setDePrueba();
+  const setB = { ...setDePrueba(), statut: 'complet' };
+
+  await Promise.all([
+    writeSet(dataDir, setA),
+    writeSet(dataDir, setB),
+  ]);
+
+  // No importa cuál "ganó": el archivo final debe ser un JSON válido y completo,
+  // nunca una mezcla truncada de ambas escrituras.
+  const final = await readSet(dataDir, setA.id);
+  assert.ok(final.statut === 'partial' || final.statut === 'complet');
+  const contenido = await readdir(setDir(dataDir, setA.id));
+  assert.ok(!contenido.some(nombre => nombre.includes('.tmp')), `quedaron temporales: ${contenido}`);
+});
