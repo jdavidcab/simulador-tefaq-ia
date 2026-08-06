@@ -11,7 +11,7 @@ export function createInitialState() {
     status: 'running', // 'running' | 'complete' | 'abandoned'
     sectionIndex: 0,
     itemIndex: 0,
-    phase: 'avant', // 'avant' | 'audio-pending' | 'audio-playing' | 'audio-failed' | 'apres' | 'section-transition'
+    phase: 'section-intro', // 'section-intro' | 'avant' | 'audio-pending' | 'audio-playing' | 'audio-failed' | 'apres'
     answers: {},
   };
 }
@@ -36,22 +36,15 @@ function isLastSection(set, sectionIndex) {
   return sectionIndex === set.sections.length - 1;
 }
 
-// Al vencer 'apres': siguiente ítem de la misma sección, pantalla de
-// transición si era el último ítem de la sección, o fin del set si además
-// era la última sección.
 function advance(set, state) {
   const { sectionIndex, itemIndex } = state;
   if (!isLastItemInSection(set, sectionIndex, itemIndex)) {
     return { ...state, itemIndex: itemIndex + 1, phase: 'avant' };
   }
   if (!isLastSection(set, sectionIndex)) {
-    return { ...state, phase: 'section-transition' };
+    return { ...state, sectionIndex: sectionIndex + 1, itemIndex: 0, phase: 'section-intro' };
   }
   return { ...state, status: 'complete' };
-}
-
-function startNextSection(state) {
-  return { ...state, sectionIndex: state.sectionIndex + 1, itemIndex: 0, phase: 'avant' };
 }
 
 const ANSWERABLE_PHASES = new Set(['avant', 'audio-pending', 'audio-playing', 'apres']);
@@ -85,6 +78,7 @@ export function reducer(set, state, event) {
 
     case 'TIMER_EXPIRED': {
       if (!sameToken(event.token, currentToken(state))) return state;
+      if (state.phase === 'section-intro') return { ...state, phase: 'avant' };
       if (state.phase === 'avant') return { ...state, phase: 'audio-pending' };
       if (state.phase === 'audio-playing') return { ...state, phase: 'apres' }; // watchdog
       if (state.phase === 'apres') return advance(set, state);
@@ -116,11 +110,6 @@ export function reducer(set, state, event) {
       if (!sameToken(event.token, currentToken(state))) return state;
       if (state.phase !== 'audio-failed') return state;
       return { ...state, phase: 'audio-pending' };
-    }
-
-    case 'SECTION_CONTINUE': {
-      if (state.phase !== 'section-transition') return state;
-      return startNextSection(state);
     }
 
     default:

@@ -29,6 +29,12 @@ function dispatch(set, state, event) {
   return reducer(set, state, event);
 }
 
+// El estado inicial arranca en 'section-intro'; todos los tests que asumen
+// estar ya en 'avant' del primer ítem necesitan pasar por acá primero.
+function skipIntro(set, state) {
+  return dispatch(set, state, { type: 'TIMER_EXPIRED', token: currentToken(state) });
+}
+
 function runItemToApres(set, state) {
   state = dispatch(set, state, { type: 'TIMER_EXPIRED', token: currentToken(state) }); // avant -> audio-pending
   state = dispatch(set, state, { type: 'AUDIO_PLAYING', token: currentToken(state) });
@@ -36,16 +42,31 @@ function runItemToApres(set, state) {
   return state;
 }
 
+test('el estado inicial arranca en section-intro de la primera sección', () => {
+  const state = createInitialState();
+  assert.equal(state.phase, 'section-intro');
+  assert.equal(state.sectionIndex, 0);
+  assert.equal(state.itemIndex, 0);
+});
+
+test('TIMER_EXPIRED en section-intro pasa a avant sin tocar sectionIndex/itemIndex', () => {
+  const set = fixtureSet();
+  const state = skipIntro(set, createInitialState());
+  assert.equal(state.phase, 'avant');
+  assert.equal(state.sectionIndex, 0);
+  assert.equal(state.itemIndex, 0);
+});
+
 test('avant vence y pide reproducir audio', () => {
   const set = fixtureSet();
-  let state = createInitialState();
+  let state = skipIntro(set, createInitialState());
   state = dispatch(set, state, { type: 'TIMER_EXPIRED', token: currentToken(state) });
   assert.equal(state.phase, 'audio-pending');
 });
 
 test('AUDIO_PLAYING solo aplica en audio-pending y con el token correcto', () => {
   const set = fixtureSet();
-  let state = createInitialState();
+  let state = skipIntro(set, createInitialState());
   state = dispatch(set, state, { type: 'TIMER_EXPIRED', token: currentToken(state) }); // -> audio-pending
   const staleToken = { sectionIndex: 0, itemIndex: 0, phase: 'avant' }; // token de la fase anterior
   const unchanged = dispatch(set, state, { type: 'AUDIO_PLAYING', token: staleToken });
@@ -56,7 +77,7 @@ test('AUDIO_PLAYING solo aplica en audio-pending y con el token correcto', () =>
 
 test('AUDIO_ENDED y un watchdog tardío compitiendo por el mismo ítem no avanzan dos veces', () => {
   const set = fixtureSet();
-  let state = createInitialState();
+  let state = skipIntro(set, createInitialState());
   state = dispatch(set, state, { type: 'TIMER_EXPIRED', token: currentToken(state) });
   state = dispatch(set, state, { type: 'AUDIO_PLAYING', token: currentToken(state) });
   const tokenDuringAudio = currentToken(state);
@@ -72,7 +93,7 @@ test('AUDIO_ENDED y un watchdog tardío compitiendo por el mismo ítem no avanza
 
 test('el watchdog SÍ avanza a apres cuando AUDIO_ENDED nunca llega', () => {
   const set = fixtureSet();
-  let state = createInitialState();
+  let state = skipIntro(set, createInitialState());
   state = dispatch(set, state, { type: 'TIMER_EXPIRED', token: currentToken(state) });
   state = dispatch(set, state, { type: 'AUDIO_PLAYING', token: currentToken(state) });
   state = dispatch(set, state, { type: 'TIMER_EXPIRED', token: currentToken(state) }); // watchdog
@@ -81,7 +102,7 @@ test('el watchdog SÍ avanza a apres cuando AUDIO_ENDED nunca llega', () => {
 
 test('ANSWER_SELECTED se acepta durante avant, audio-pending, audio-playing y apres', () => {
   const set = fixtureSet();
-  let state = createInitialState();
+  let state = skipIntro(set, createInitialState());
   state = dispatch(set, state, { type: 'ANSWER_SELECTED', token: currentToken(state), questionIndex: 0, optionId: 'A' });
   assert.equal(state.answers.annonce_publique.s1i1[0], 'A');
 
@@ -102,7 +123,7 @@ test('ANSWER_SELECTED se acepta durante avant, audio-pending, audio-playing y ap
 
 test('ANSWER_SELECTED acepta token con phase desactualizado si el ítem coincide', () => {
   const set = fixtureSet();
-  let state = createInitialState();
+  let state = skipIntro(set, createInitialState());
   state = runItemToApres(set, state);
 
   // Estamos en phase: 'apres', pero enviamos un token con phase: 'avant' (desactualizado)
@@ -114,7 +135,7 @@ test('ANSWER_SELECTED acepta token con phase desactualizado si el ítem coincide
 
 test('una respuesta registrada justo antes del vencimiento del deadline queda contada', () => {
   const set = fixtureSet();
-  let state = createInitialState();
+  let state = skipIntro(set, createInitialState());
   state = runItemToApres(set, state);
   state = dispatch(set, state, { type: 'ANSWER_SELECTED', token: currentToken(state), questionIndex: 0, optionId: 'A' });
   const beforeExpiry = state;
@@ -125,32 +146,33 @@ test('una respuesta registrada justo antes del vencimiento del deadline queda co
 
 test('preguntas sin responder quedan registradas como ausentes, no se descartan', () => {
   const set = fixtureSet();
-  let state = createInitialState();
+  let state = skipIntro(set, createInitialState());
   state = runItemToApres(set, state);
   state = dispatch(set, state, { type: 'TIMER_EXPIRED', token: currentToken(state) }); // apres vence sin responder
   const results = computeResults(set, state.answers);
   assert.equal(results.correctBySection.annonce_publique, 0);
 });
 
-test('el último ítem de una sección dispara section-transition, no el siguiente ítem', () => {
+test('el último ítem de una sección dispara section-intro de la siguiente, con sectionIndex ya incrementado', () => {
   const set = fixtureSet();
-  let state = createInitialState();
+  let state = skipIntro(set, createInitialState());
   state = runItemToApres(set, state);
   state = dispatch(set, state, { type: 'TIMER_EXPIRED', token: currentToken(state) }); // -> item 2 de la sección
   state = runItemToApres(set, state);
-  state = dispatch(set, state, { type: 'TIMER_EXPIRED', token: currentToken(state) }); // último ítem -> section-transition
-  assert.equal(state.phase, 'section-transition');
-  assert.equal(state.sectionIndex, 0, 'todavía no cruzó a la siguiente sección hasta el clic de Continuar');
+  state = dispatch(set, state, { type: 'TIMER_EXPIRED', token: currentToken(state) }); // último ítem -> section-intro
+  assert.equal(state.phase, 'section-intro');
+  assert.equal(state.sectionIndex, 1, 'a diferencia de antes, ya cruzó a la siguiente sección en el mismo paso');
+  assert.equal(state.itemIndex, 0);
 });
 
-test('SECTION_CONTINUE cruza a la siguiente sección desde su primer ítem', () => {
+test('TIMER_EXPIRED en section-intro de la siguiente sección pasa a avant de su primer ítem', () => {
   const set = fixtureSet();
-  let state = createInitialState();
+  let state = skipIntro(set, createInitialState());
   state = runItemToApres(set, state);
   state = dispatch(set, state, { type: 'TIMER_EXPIRED', token: currentToken(state) });
   state = runItemToApres(set, state);
-  state = dispatch(set, state, { type: 'TIMER_EXPIRED', token: currentToken(state) }); // section-transition
-  state = dispatch(set, state, { type: 'SECTION_CONTINUE' });
+  state = dispatch(set, state, { type: 'TIMER_EXPIRED', token: currentToken(state) }); // section-intro (sección 1)
+  state = dispatch(set, state, { type: 'TIMER_EXPIRED', token: currentToken(state) }); // -> avant
   assert.equal(state.sectionIndex, 1);
   assert.equal(state.itemIndex, 0);
   assert.equal(state.phase, 'avant');
@@ -158,12 +180,12 @@ test('SECTION_CONTINUE cruza a la siguiente sección desde su primer ítem', () 
 
 test('el último ítem del set (2 preguntas) pasa a status complete y computa el resultado', () => {
   const set = fixtureSet();
-  let state = createInitialState();
+  let state = skipIntro(set, createInitialState());
   state = runItemToApres(set, state);
   state = dispatch(set, state, { type: 'TIMER_EXPIRED', token: currentToken(state) });
   state = runItemToApres(set, state);
-  state = dispatch(set, state, { type: 'TIMER_EXPIRED', token: currentToken(state) }); // section-transition
-  state = dispatch(set, state, { type: 'SECTION_CONTINUE' }); // sección 1 (interview)
+  state = dispatch(set, state, { type: 'TIMER_EXPIRED', token: currentToken(state) }); // section-intro (sección 1)
+  state = dispatch(set, state, { type: 'TIMER_EXPIRED', token: currentToken(state) }); // -> avant, sección 1 (interview)
 
   state = runItemToApres(set, state);
   state = dispatch(set, state, { type: 'ANSWER_SELECTED', token: currentToken(state), questionIndex: 0, optionId: 'A' });
@@ -178,7 +200,7 @@ test('el último ítem del set (2 preguntas) pasa a status complete y computa el
 
 test('AUDIO_FAILED detiene la máquina explícitamente, nunca se confunde con AUDIO_ENDED', () => {
   const set = fixtureSet();
-  let state = createInitialState();
+  let state = skipIntro(set, createInitialState());
   state = dispatch(set, state, { type: 'TIMER_EXPIRED', token: currentToken(state) }); // -> audio-pending
   state = dispatch(set, state, { type: 'AUDIO_FAILED', token: currentToken(state) });
   assert.equal(state.phase, 'audio-failed');
