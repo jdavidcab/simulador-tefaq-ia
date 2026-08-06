@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { createInitialState, reducer, currentToken, computeResults } from './examMachine';
 import { startPhase, remainingSeconds, isExpired, chainDeadline } from './examTiming';
+import { buildProgressTabs } from './examProgress';
 
 const TICK_MS = 250;
 const WATCHDOG_GRACE_MS = 1000;
@@ -65,6 +66,21 @@ const OptionSelect = ({ options, value, onChange }) => {
   );
 };
 
+const ProgressTabs = ({ tabs }) => (
+  <div className="flex gap-1" aria-hidden="true">
+    {tabs.map((tab, i) => (
+      <div
+        key={i}
+        className={`h-2 flex-1 rounded-sm ${
+          tab.status === 'completed' ? 'bg-blue-600'
+            : tab.status === 'current' ? 'bg-blue-400'
+              : 'bg-gray-200'
+        }`}
+      />
+    ))}
+  </div>
+);
+
 const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
   const [state, dispatch] = useReducer((s, e) => reducer(set, s, e), undefined, createInitialState);
   const stateRef = useRef(state);
@@ -78,6 +94,7 @@ const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
 
   const section = set.sections[state.sectionIndex];
   const item = section?.items?.[state.itemIndex];
+  const progressTabs = buildProgressTabs(set, state);
 
   const clearWatchdog = useCallback(() => {
     if (watchdogRef.current) {
@@ -221,6 +238,7 @@ const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
     const introQuestionCount = introSection.items.reduce((n, i) => n + i.questions.length, 0);
     return (
       <div className="space-y-4 text-center py-10">
+        <ProgressTabs tabs={progressTabs} />
         <h3 className="text-xl font-bold">{SECTION_LABELS[introSection.type]}</h3>
         <p className="text-gray-600">{introQuestionCount} preguntas</p>
         <p className="text-blue-800 font-semibold max-w-lg mx-auto px-4">{SECTION_INSTRUCTIONS[introSection.type]}</p>
@@ -238,6 +256,7 @@ const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
   if (state.phase === 'audio-failed') {
     return (
       <div className="space-y-4 text-center py-10">
+        <ProgressTabs tabs={progressTabs} />
         <p className="text-red-600">No se pudo reproducir el audio.</p>
         <button onClick={handleRetryAudio} className="bg-blue-600 text-white px-6 py-2 rounded">Reintentar</button>
         <button onClick={handleAbandon} className="block mx-auto text-sm text-gray-500 hover:underline">Abandonar</button>
@@ -253,6 +272,7 @@ const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
 
   return (
     <div className="space-y-4">
+      <ProgressTabs tabs={progressTabs} />
       <div className="flex items-center justify-between text-sm text-gray-500">
         <span>{SECTION_LABELS[section.type]} · ítem {state.itemIndex + 1}/{section.items.length}</span>
         <button onClick={handleAbandon} className="text-red-600 hover:underline">Abandonar</button>
