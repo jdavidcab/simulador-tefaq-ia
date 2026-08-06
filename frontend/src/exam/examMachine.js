@@ -105,7 +105,10 @@ export function reducer(set, state, event) {
 
     case 'AUDIO_FAILED': {
       if (!sameToken(event.token, currentToken(state))) return state;
-      if (state.phase !== 'audio-pending' && state.phase !== 'audio-playing') return state;
+      // El único emisor real es el manejador de rechazo de play(), que por
+      // definición no puede disparar una vez que el estado ya avanzó a
+      // audio-playing -- se restringe la aceptación a audio-pending.
+      if (state.phase !== 'audio-pending') return state;
       return { ...state, phase: 'audio-failed' };
     }
 

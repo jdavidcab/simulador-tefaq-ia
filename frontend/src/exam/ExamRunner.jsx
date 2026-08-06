@@ -84,9 +84,19 @@ const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
   useEffect(() => {
     if (state.status !== 'running' || !section) return;
     if (state.phase === 'avant') {
-      phaseTimingRef.current = lastApresPhaseTimingRef.current
-        ? chainDeadline(lastApresPhaseTimingRef.current, section.timing.avant)
-        : startPhase(section.timing.avant);
+      if (lastApresPhaseTimingRef.current) {
+        // Encadenar es correcto para el slop de detección de ~TICK_MS que
+        // este mecanismo espera. Pero si la pestaña estuvo en background
+        // durante 'apres' (sin audio sonando, nada la mantiene en primer
+        // plano), Chrome puede throttlear el interval a 1/s o 1/min, y para
+        // cuando el tick realmente corre el deadline encadenado ya venció
+        // hace rato -- encadenar sobre eso robaría toda la ventana de
+        // lectura del ítem siguiente. Si ya venció, arrancar fresco.
+        const chained = chainDeadline(lastApresPhaseTimingRef.current, section.timing.avant);
+        phaseTimingRef.current = isExpired(chained) ? startPhase(section.timing.avant) : chained;
+      } else {
+        phaseTimingRef.current = startPhase(section.timing.avant);
+      }
       lastApresPhaseTimingRef.current = null;
       setRemaining(remainingSeconds(phaseTimingRef.current));
     } else if (state.phase === 'apres') {
@@ -122,7 +132,15 @@ const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
     if (state.phase !== 'audio-pending' || !item) return;
     const audioEl = audioElRef.current;
     const token = currentToken(state);
-    audioEl.src = audioUrls.get(item.ref);
+    const url = audioUrls.get(item.ref);
+    // No debería pasar dado el contrato de preload+compatibilidad, pero por
+    // defensividad: sin ref o sin URL, no dejar que audioEl.src se stringifique
+    // a "undefined" y falle con un error confuso tipo 404.
+    if (!audioEl || !url) {
+      dispatch({ type: 'AUDIO_FAILED', token });
+      return;
+    }
+    audioEl.src = url;
     audioEl.play().then(
       () => dispatch({ type: 'AUDIO_PLAYING', token }),
       () => dispatch({ type: 'AUDIO_FAILED', token }),
@@ -185,13 +203,15 @@ const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
 
   if (state.phase === 'section-transition') {
     const nextSection = set.sections[state.sectionIndex + 1];
+    const nextQuestionCount = nextSection.items.reduce((n, i) => n + i.questions.length, 0);
     return (
       <div className="space-y-4 text-center py-10">
         <h3 className="text-xl font-bold">Sección siguiente: {SECTION_LABELS[nextSection.type]}</h3>
-        <p className="text-gray-600">{nextSection.items.length} ítems</p>
+        <p className="text-gray-600">{nextQuestionCount} preguntas</p>
         <button onClick={handleSectionContinue} className="bg-blue-600 text-white px-6 py-2 rounded">
           Continuar
         </button>
+        <button onClick={handleAbandon} className="block mx-auto text-sm text-gray-500 hover:underline">Abandonar</button>
       </div>
     );
   }

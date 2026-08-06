@@ -37,6 +37,15 @@ const ExamMode = ({ onActiveChange }) => {
     return () => window.removeEventListener('beforeunload', handler);
   }, [phase]);
 
+  // Red de seguridad para cuando ExamMode se desmonta (p.ej. el usuario
+  // vuelve a Entrenamiento) sin pasar por goToPicker -- reaching 'summary' o
+  // 'preload-failed' ya reactivó el selector de modo (ver ACTIVE_PHASES), así
+  // que un desmontaje directo desde ahí saltaría toda la limpieza normal.
+  useEffect(() => () => {
+    preloadAbortRef.current?.abort();
+    revokeAudioUrls(audioUrlsRef.current);
+  }, []);
+
   const resetAudio = useCallback(() => {
     revokeAudioUrls(audioUrlsRef.current);
     audioUrlsRef.current = new Map();
@@ -73,6 +82,9 @@ const ExamMode = ({ onActiveChange }) => {
       signal: preloadAbortRef.current.signal,
       onProgress: setPreloadProgress,
     });
+    // preloadSetAudio resuelve normalmente incluso si se abortó (goToPicker
+    // ya reseteó phase/estado): no pisar eso con el resultado obsoleto.
+    if (preloadAbortRef.current?.signal.aborted) return;
     for (const [ref, url] of urls) audioUrlsRef.current.set(ref, url);
     if (failed.length > 0) {
       setFailedRefs(failed);
@@ -110,22 +122,29 @@ const ExamMode = ({ onActiveChange }) => {
   }, [runPreload, failedRefs, setId]);
 
   const handleUnlock = useCallback(async () => {
-    const audioEl = audioElRef.current;
-    const firstRef = setDetail?.sections?.[0]?.items?.[0]?.ref;
-    const firstUrl = firstRef ? audioUrlsRef.current.get(firstRef) : null;
-    if (firstUrl) audioEl.src = firstUrl;
-    audioEl.muted = true;
+    // Toda la función va envuelta: NADA de lo de aquí adentro (ref nula,
+    // .currentTime = 0 lanzando InvalidStateError en algunos motores cuando
+    // readyState === HAVE_NOTHING, etc.) puede impedir llegar a
+    // setPhase('running') -- ese es justo el síntoma original que esto arregla.
     try {
-      await audioEl.play();
-      audioEl.pause();
+      const audioEl = audioElRef.current;
+      const firstRef = setDetail?.sections?.[0]?.items?.[0]?.ref;
+      const firstUrl = firstRef ? audioUrlsRef.current.get(firstRef) : null;
+      if (firstUrl) audioEl.src = firstUrl;
+      audioEl.muted = true;
+      try {
+        await audioEl.play();
+        audioEl.pause();
+      } finally {
+        audioEl.muted = false;
+        audioEl.currentTime = 0;
+      }
     } catch {
-      // Un rechazo aquí no es fatal: ExamRunner reintenta la reproducción real
-      // del primer ítem con su propio manejo de AUDIO_FAILED.
+      // Nada aquí es fatal para arrancar el examen: ExamRunner maneja
+      // AUDIO_FAILED con su propia UI de reintento una vez en 'running'.
     } finally {
-      audioEl.muted = false;
-      audioEl.currentTime = 0;
+      setPhase('running');
     }
-    setPhase('running');
   }, [setDetail]);
 
   const handleComplete = useCallback((finalResults) => {
@@ -177,6 +196,9 @@ const ExamMode = ({ onActiveChange }) => {
       {phase === 'preloading' && (
         <div className="text-center py-10 space-y-2">
           <p className="text-blue-600">Preparando examen... {preloadProgress.done}/{preloadProgress.total}</p>
+          <button onClick={goToPicker} className="block mx-auto text-sm text-gray-500 hover:underline">
+            Cancelar / Volver a la lista
+          </button>
         </div>
       )}
 
