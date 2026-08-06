@@ -25,12 +25,16 @@ El backend genera preguntas con una cadena de fallback configurable:
 
 ## Modo Examen — generación de sets
 
-Además del modo entrenamiento (una pregunta a la vez), el backend puede generar y persistir **sets de examen completos** — 36 preguntas repartidas en las 7 secciones oficiales generables (annonce_publique, répondeur, micro-trottoir, chronique, interview, reportage, divers; conversation_image queda pendiente para una fase futura). Es un proceso de disco, sin frontend propio todavía — se opera vía HTTP.
+Además del modo entrenamiento (una pregunta a la vez), el backend puede generar y persistir **sets de examen completos** — 36 preguntas repartidas en las 7 secciones oficiales generables (annonce_publique, répondeur, micro-trottoir, chronique, interview, reportage, divers; conversation_image queda pendiente para una fase futura). La generación sigue siendo un proceso de disco que se dispara vía HTTP; para *tomar* un set ya generado, el frontend tiene un modo aparte (ver abajo).
 
 - `POST /api/sets/generate` — inicia la generación de un set nuevo (body opcional: `{ difficulty, pilotes, seed, maxItems }`). Responde de inmediato con el `id` del set y arranca la generación en segundo plano.
 - `POST /api/sets/:id/resume` — retoma un set interrumpido. Solo regenera los ítems que no hayan llegado a `pret`; nunca repite un ítem ya completado ni reasigna su tema.
 - `GET /api/sets` — lista los sets con su progreso. `GET /api/sets/:id` — el set completo. `GET /api/sets/:id/status` — solo el resumen de progreso.
 - `GET /api/sets/:id/audio/:archivo.wav` — sirve el audio de un ítem. `DELETE /api/sets/:id` — borra el set y su carpeta.
+
+### Tomar un set generado (frontend)
+
+Desde la pantalla inicial del frontend, el switch superior cambia a **Modo Examen**: lista los sets con `statut: 'complet'`, valida que sean compatibles con el runner (formato `SET_STANDARD_36`, sin pilotos, 32 ítems / 36 preguntas — un set generado con `pilotes: true` se rechaza explícitamente, con un mensaje claro, antes de precargar nada), precarga los 32 audios, y corre el examen en lockstep: lectura antes de cada audio, reproducción automática sin controles (ni pausa, ni repetir, ni velocidad), tiempo para responder, sin pausa ni retroceso entre preguntas, con una pantalla corta entre las 7 secciones. Al terminar muestra un resumen crudo (aciertos por sección y total) — el puntaje estimado /699 y el análisis detallado quedan para una fase futura. No hay reanudación: cerrar la pestaña o pulsar "Abandonar" descarta el intento completo, sin guardar nada.
 
 Los sets viven en `backend/data/sets/<id>/` (`set.json` + `audio/*.wav`), y **no están en el repositorio** (`.gitignore`) porque cuestan cuota real de API generarlos. Un set en curso puede interrumpirse (cerrar el proceso, `Ctrl+C`) y **reanudarse** más tarde con `resume` sin perder ni repetir trabajo ya pagado — cada ítem se escribe a disco en cuanto está listo. Si la clave de TTS se agota o falla por cuota/red, la corrida se detiene limpiamente (no sigue insistiendo contra una clave muerta); otros fallos de audio, en cambio, se registran y se continúa con el siguiente ítem.
 
