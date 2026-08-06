@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import SetPicker from './SetPicker';
 import ExamRunner from './ExamRunner';
+import ExamReview from './ExamReview';
 import ExamSummary from './ExamSummary';
 import { checkSetCompatibility } from './setCompatibility';
 import { preloadSetAudio, revokeAudioUrls } from './audioPreload';
@@ -170,10 +171,12 @@ const ExamMode = ({ onActiveChange }) => {
   }, [setDetail]);
 
   const handleComplete = useCallback((finalResults) => {
-    resetAudio();
     setResults(finalResults);
     setPhase('summary');
-  }, [resetAudio]);
+  }, []);
+
+  const handleShowReview = useCallback(() => setPhase('review'), []);
+  const handleBackToSummary = useCallback(() => setPhase('summary'), []);
 
   const totalsBySection = setDetail
     ? Object.fromEntries(
@@ -265,6 +268,18 @@ const ExamMode = ({ onActiveChange }) => {
           totalQuestions={Object.values(totalsBySection).reduce((a, b) => a + b, 0)}
           correctBySection={results.correctBySection}
           totalsBySection={totalsBySection}
+          onExit={goToPicker}
+          onShowReview={handleShowReview}
+        />
+      )}
+
+      {phase === 'review' && setDetail && results && (
+        <ExamReview
+          set={setDetail}
+          answers={results.answers}
+          audioElRef={audioElRef}
+          audioUrls={audioUrlsRef.current}
+          onBackToSummary={handleBackToSummary}
           onExit={goToPicker}
         />
       )}
