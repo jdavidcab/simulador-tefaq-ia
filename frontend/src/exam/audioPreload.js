@@ -65,8 +65,8 @@ export async function preloadSetAudio({ setId, refs, concurrency = 4, signal, on
         await confirmPlayable(blobUrl);
         urls.set(ref, blobUrl);
       } catch (error) {
+        if (blobUrl) URL.revokeObjectURL(blobUrl); // siempre revocar, incluso si el fallo fue por abort
         if (signal?.aborted) return;
-        if (blobUrl) URL.revokeObjectURL(blobUrl); // no dejar colgado un blob que falló recién creado
         failedRefs.push(ref);
       } finally {
         done += 1;
