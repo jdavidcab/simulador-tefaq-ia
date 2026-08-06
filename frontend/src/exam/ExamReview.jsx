@@ -24,9 +24,26 @@ const TranscriptWithHighlights = ({ transcript, questions }) => {
 
   return (
     <div className="bg-purple-50 border border-purple-200 rounded p-4 text-sm space-y-2">
+      {questions.length > 1 && (
+        <div className="flex gap-3 text-xs text-gray-600">
+          {questions.map((_, questionIndex) => (
+            <span key={questionIndex} className="flex items-center gap-1">
+              <span className={`inline-block w-3 h-3 rounded ${HIGHLIGHT_COLORS[questionIndex % HIGHLIGHT_COLORS.length]}`} />
+              Pregunta {questionIndex + 1}
+            </span>
+          ))}
+        </div>
+      )}
       <p>
         {segments.map((segment, i) => {
           if (segment.questionIndexes.length === 0) return <span key={i}>{segment.text}</span>;
+          if (segment.questionIndexes.length > 1) {
+            return (
+              <span key={i} className="bg-gradient-to-r from-yellow-200 to-sky-200 rounded px-0.5 underline decoration-2">
+                {segment.text}
+              </span>
+            );
+          }
           const colorClass = HIGHLIGHT_COLORS[segment.questionIndexes[0] % HIGHLIGHT_COLORS.length];
           return (
             <span key={i} className={`${colorClass} rounded px-0.5`}>
@@ -67,9 +84,11 @@ const ExamReview = ({ set, answers, audioElRef, audioUrls, onBackToSummary, onEx
   useEffect(() => {
     const audioEl = audioElRef.current;
     if (!audioEl) return undefined;
-    const onPlaying = () => setPlayback(prev => ({ ...prev, status: 'playing', error: null }));
-    const onEnded = () => setPlayback(prev => ({ ...prev, status: 'idle' }));
-    const onError = () => setPlayback(prev => ({ ...prev, status: 'error' }));
+    const onPlaying = () => setPlayback(prev => (prev.activeRef ? { ...prev, status: 'playing', error: null } : prev));
+    const onEnded = () => setPlayback(prev => (prev.activeRef ? { ...prev, status: 'idle' } : prev));
+    const onError = () => setPlayback(prev => (prev.activeRef
+      ? { ...prev, status: 'error', error: 'No se pudo reproducir el audio' }
+      : prev));
     audioEl.addEventListener('playing', onPlaying);
     audioEl.addEventListener('ended', onEnded);
     audioEl.addEventListener('error', onError);
@@ -151,7 +170,17 @@ const ExamReview = ({ set, answers, audioElRef, audioUrls, onBackToSummary, onEx
                   onClick={() => toggleExpanded(item.ref)}
                   className="w-full flex items-center justify-between p-3 text-left hover:bg-gray-50"
                 >
-                  <span>Audio {itemIndex + 1}/{section.items.length}</span>
+                  <span className="flex items-center gap-2">
+                    <span>Audio {itemIndex + 1}/{section.items.length}</span>
+                    {isActive && playback.status === 'playing' && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); stopPlayback(); setPlayback(prev => (prev.activeRef === item.ref ? { ...prev, status: 'idle' } : prev)); }}
+                        className="text-xs text-blue-600 font-semibold underline"
+                      >
+                        reproduciendo — detener
+                      </button>
+                    )}
+                  </span>
                   <span className="font-semibold">{item.correctCount}/{item.questionCount} correctas</span>
                 </button>
                 {isExpanded && (
