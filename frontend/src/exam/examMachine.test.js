@@ -88,6 +88,28 @@ test('ANSWER_SELECTED se acepta durante avant, audio-pending, audio-playing y ap
   state = dispatch(set, state, { type: 'TIMER_EXPIRED', token: currentToken(state) }); // -> audio-pending
   state = dispatch(set, state, { type: 'ANSWER_SELECTED', token: currentToken(state), questionIndex: 0, optionId: 'B' });
   assert.equal(state.answers.annonce_publique.s1i1[0], 'B', 'debe poder cambiar la respuesta mientras el ítem sigue visible');
+
+  // Continuar a audio-playing
+  state = dispatch(set, state, { type: 'AUDIO_PLAYING', token: currentToken(state) }); // -> audio-playing
+  state = dispatch(set, state, { type: 'ANSWER_SELECTED', token: currentToken(state), questionIndex: 0, optionId: 'C' });
+  assert.equal(state.answers.annonce_publique.s1i1[0], 'C', 'debe aceptar respuesta durante audio-playing');
+
+  // Continuar a apres
+  state = dispatch(set, state, { type: 'AUDIO_ENDED', token: currentToken(state) }); // -> apres
+  state = dispatch(set, state, { type: 'ANSWER_SELECTED', token: currentToken(state), questionIndex: 0, optionId: 'A' });
+  assert.equal(state.answers.annonce_publique.s1i1[0], 'A', 'debe aceptar respuesta durante apres');
+});
+
+test('ANSWER_SELECTED acepta token con phase desactualizado si el ítem coincide', () => {
+  const set = fixtureSet();
+  let state = createInitialState();
+  state = runItemToApres(set, state);
+
+  // Estamos en phase: 'apres', pero enviamos un token con phase: 'avant' (desactualizado)
+  // Si la verificación fuera sameToken en lugar de sameItem, esto fallaría.
+  const stalePhaseToken = { sectionIndex: 0, itemIndex: 0, phase: 'avant' };
+  state = dispatch(set, state, { type: 'ANSWER_SELECTED', token: stalePhaseToken, questionIndex: 0, optionId: 'A' });
+  assert.equal(state.answers.annonce_publique.s1i1[0], 'A', 'debe aceptar respuesta incluso con token de phase desactualizado, siempre que el ítem coincida');
 });
 
 test('una respuesta registrada justo antes del vencimiento del deadline queda contada', () => {
