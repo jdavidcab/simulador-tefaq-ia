@@ -62,6 +62,7 @@ const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
   const phaseTimingRef = useRef(null);
   const lastApresPhaseTimingRef = useRef(null);
   const watchdogRef = useRef(null);
+  const firedRef = useRef(false);
   const [remaining, setRemaining] = useState(0);
 
   const section = set.sections[state.sectionIndex];
@@ -152,8 +153,14 @@ const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
   }, [audioElRef, clearWatchdog]);
 
   useEffect(() => {
-    if (state.status === 'complete') onComplete(computeResults(set, state.answers));
-    if (state.status === 'abandoned') onAbandon();
+    if (firedRef.current) return;
+    if (state.status === 'complete') {
+      firedRef.current = true;
+      onComplete(computeResults(set, state.answers));
+    } else if (state.status === 'abandoned') {
+      firedRef.current = true;
+      onAbandon();
+    }
   }, [state.status, set, state.answers, onComplete, onAbandon]);
 
   const handleAnswer = (questionIndex, optionId) => {
@@ -221,7 +228,7 @@ const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
 
       <div className="space-y-6">
         {questions.map((question, questionIndex) => (
-          <div key={questionIndex} className="border rounded p-4 space-y-2">
+          <div key={`${item.ref}-${questionIndex}`} className="border rounded p-4 space-y-2">
             <h3 className="font-bold">{question.prompt}</h3>
             {useSelect ? (
               <OptionSelect
