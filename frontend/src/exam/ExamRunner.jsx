@@ -27,6 +27,13 @@ const SECTION_INSTRUCTIONS = {
   divers: 'Vous allez entendre différents documents sonores. Écoutez chacun et répondez à la question.',
 };
 
+function formatSeconds(totalSeconds) {
+  const safe = Math.max(0, Math.floor(totalSeconds || 0));
+  const m = Math.floor(safe / 60);
+  const s = safe % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
 const SELECT_SECTIONS = new Set(['interview', 'reportage']);
 
 // Listbox propio en vez de <select> nativo: el texto de las opciones largas
@@ -91,6 +98,7 @@ const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
   const watchdogRef = useRef(null);
   const firedRef = useRef(false);
   const [remaining, setRemaining] = useState(0);
+  const [audioCurrentTime, setAudioCurrentTime] = useState(0);
 
   const section = set.sections[state.sectionIndex];
   const item = section?.items?.[state.itemIndex];
@@ -178,6 +186,7 @@ const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
       return;
     }
     audioEl.src = url;
+    setAudioCurrentTime(0);
     audioEl.play().then(
       () => dispatch({ type: 'AUDIO_PLAYING', token }),
       () => dispatch({ type: 'AUDIO_FAILED', token }),
@@ -203,8 +212,13 @@ const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
       clearWatchdog();
       dispatch({ type: 'AUDIO_ENDED', token: currentToken(stateRef.current) });
     };
+    const onTimeUpdate = () => setAudioCurrentTime(audioEl.currentTime);
     audioEl.addEventListener('ended', onEnded);
-    return () => audioEl.removeEventListener('ended', onEnded);
+    audioEl.addEventListener('timeupdate', onTimeUpdate);
+    return () => {
+      audioEl.removeEventListener('ended', onEnded);
+      audioEl.removeEventListener('timeupdate', onTimeUpdate);
+    };
   }, [audioElRef, clearWatchdog]);
 
   useEffect(() => {
@@ -287,6 +301,20 @@ const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
       {state.phase === 'audio-pending' && <p className="text-center text-blue-600">Preparando audio...</p>}
       {state.phase === 'audio-playing' && <p className="text-center text-blue-600">Escuchando...</p>}
 
+      {(state.phase === 'audio-pending' || state.phase === 'audio-playing') && item && (
+        <div className="max-w-md mx-auto space-y-1">
+          <div className="h-2 bg-gray-300 rounded overflow-hidden">
+            <div
+              className="h-full bg-gray-600"
+              style={{ width: `${item.duree_audio_s > 0 ? Math.min(100, (audioCurrentTime / item.duree_audio_s) * 100) : 0}%` }}
+            />
+          </div>
+          <p className="text-center text-xs text-gray-500">
+            {formatSeconds(audioCurrentTime)} / {formatSeconds(item.duree_audio_s)}
+          </p>
+        </div>
+      )}
+
       <div className="space-y-6">
         {questions.map((question, questionIndex) => (
           <div key={`${item.ref}-${questionIndex}`} className="border rounded p-4 space-y-2">
@@ -298,15 +326,24 @@ const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
                 onChange={optionId => handleAnswer(questionIndex, optionId)}
               />
             ) : (
-              question.options.map(opt => (
-                <button
-                  key={opt.id}
-                  onClick={() => handleAnswer(questionIndex, opt.id)}
-                  className={`w-full text-left p-3 border rounded hover:bg-blue-100 ${itemAnswers[questionIndex] === opt.id ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-200' : ''}`}
-                >
-                  <span className="font-bold mr-2">{opt.id})</span>{opt.text}
-                </button>
-              ))
+              question.options.map(opt => {
+                const selected = itemAnswers[questionIndex] === opt.id;
+                return (
+                  <label
+                    key={opt.id}
+                    className={`flex items-center gap-3 w-full text-left p-3 rounded cursor-pointer ${selected ? 'bg-gray-200' : 'hover:bg-gray-50'}`}
+                  >
+                    <input
+                      type="radio"
+                      name={`${item.ref}-q${questionIndex}`}
+                      checked={selected}
+                      onChange={() => handleAnswer(questionIndex, opt.id)}
+                      className="h-4 w-4 shrink-0"
+                    />
+                    <span>{opt.text}</span>
+                  </label>
+                );
+              })
             )}
           </div>
         ))}
