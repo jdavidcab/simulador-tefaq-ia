@@ -4,6 +4,7 @@ import { startPhase, remainingSeconds, isExpired, chainDeadline } from './examTi
 
 const TICK_MS = 250;
 const WATCHDOG_GRACE_MS = 1000;
+const SECTION_INTRO_SECONDS = 15;
 
 const SECTION_LABELS = {
   annonce_publique: 'Anuncios públicos',
@@ -13,6 +14,16 @@ const SECTION_LABELS = {
   interview: 'Entrevista',
   reportage: 'Reportaje',
   divers: 'Diversos',
+};
+
+const SECTION_INSTRUCTIONS = {
+  annonce_publique: 'Vous allez entendre des annonces publiques. Écoutez chacune et répondez à la question.',
+  repondeur: 'Vous allez entendre des messages de répondeur téléphonique. Écoutez chacun et répondez à la question.',
+  micro_trottoir: 'Vous allez entendre un micro-trottoir : plusieurs personnes donnent leur opinion. Écoutez chacune et répondez à la question.',
+  chronique: 'Vous allez entendre une chronique radiophonique. Écoutez-la attentivement et répondez aux questions.',
+  interview: 'Vous allez entendre une interview. Écoutez-la attentivement et répondez aux questions.',
+  reportage: 'Vous allez entendre un reportage. Écoutez-le attentivement et répondez aux questions.',
+  divers: 'Vous allez entendre différents documents sonores. Écoutez chacun et répondez à la question.',
 };
 
 const SELECT_SECTIONS = new Set(['interview', 'reportage']);
@@ -60,7 +71,7 @@ const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
   useEffect(() => { stateRef.current = state; }, [state]);
 
   const phaseTimingRef = useRef(null);
-  const lastApresPhaseTimingRef = useRef(null);
+  const lastPhaseTimingRef = useRef(null);
   const watchdogRef = useRef(null);
   const firedRef = useRef(false);
   const [remaining, setRemaining] = useState(0);
@@ -75,30 +86,37 @@ const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
     }
   }, []);
 
-  // Arranca/reancla el deadline de avant o apres al entrar a esa fase. Para
-  // avant, si viene de un apres de la MISMA sección (avance normal
-  // ítem-a-ítem), encadena desde el deadline teórico de ese apres en vez de
-  // "ahora" -- así el tick que detectó el vencimiento (hasta TICK_MS tarde)
-  // no filtra slop al ítem siguiente. Tras una transición de sección
-  // (clic en Continuar) o en el primer ítem, arranca fresco desde "ahora".
+  // Arranca/reancla el deadline de section-intro, avant o apres al entrar a
+  // esa fase. section-intro siempre arranca fresco desde "ahora" -- es un
+  // límite natural entre secciones. avant, en cambio, siempre encadena desde
+  // el deadline teórico de la fase anterior (el apres del ítem previo dentro
+  // de la misma sección, o el section-intro si es el primer ítem de la
+  // sección) en vez de "ahora", así el tick que detectó el vencimiento (hasta
+  // TICK_MS tarde) no filtra slop al ítem siguiente.
   useEffect(() => {
     if (state.status !== 'running' || !section) return;
-    if (state.phase === 'avant') {
-      // Encadenar SIEMPRE desde el deadline teórico del apres anterior, nunca
-      // desde "ahora" -- así el tick que detectó el vencimiento (hasta TICK_MS
-      // tarde, o mucho más si la pestaña estuvo en background y el navegador
-      // throttleó el interval) nunca regala tiempo extra. Si el deadline
-      // encadenado ya venció para cuando este efecto corre, el próximo tick
-      // lo detecta como vencido de inmediato y avanza -- ocultar la pestaña
-      // durante un examen estricto en lockstep no debe generar una ventana de
-      // lectura nueva y completa, sería explotable. Si algún día se decide que
-      // ocultar la pestaña debe PAUSAR el examen, eso necesita ser una
-      // decisión de producto explícita y su propio mecanismo (p.ej.
-      // visibilitychange), no un efecto secundario de esta aritmética.
-      phaseTimingRef.current = lastApresPhaseTimingRef.current
-        ? chainDeadline(lastApresPhaseTimingRef.current, section.timing.avant)
+    if (state.phase === 'section-intro') {
+      // Siempre arranca fresco: es un límite natural entre secciones, no se
+      // encadena desde nada anterior.
+      phaseTimingRef.current = startPhase(SECTION_INTRO_SECONDS);
+      setRemaining(remainingSeconds(phaseTimingRef.current));
+    } else if (state.phase === 'avant') {
+      // Encadenar SIEMPRE desde el deadline teórico de la fase anterior
+      // (apres del ítem previo, o section-intro si es el primer ítem de la
+      // sección), nunca desde "ahora" -- así el tick que detectó el
+      // vencimiento (hasta TICK_MS tarde, o mucho más si la pestaña estuvo en
+      // background y el navegador throttleó el interval) nunca regala tiempo
+      // extra. Si el deadline encadenado ya venció para cuando este efecto
+      // corre, el próximo tick lo detecta como vencido de inmediato y avanza
+      // -- ocultar la pestaña durante un examen estricto en lockstep no debe
+      // generar una ventana de lectura nueva y completa, sería explotable. Si
+      // algún día se decide que ocultar la pestaña debe PAUSAR el examen, eso
+      // necesita ser una decisión de producto explícita y su propio mecanismo
+      // (p.ej. visibilitychange), no un efecto secundario de esta aritmética.
+      phaseTimingRef.current = lastPhaseTimingRef.current
+        ? chainDeadline(lastPhaseTimingRef.current, section.timing.avant)
         : startPhase(section.timing.avant);
-      lastApresPhaseTimingRef.current = null;
+      lastPhaseTimingRef.current = null;
       setRemaining(remainingSeconds(phaseTimingRef.current));
     } else if (state.phase === 'apres') {
       // La fase apres arranca del instante REAL en que terminó el audio
@@ -108,18 +126,19 @@ const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
     }
   }, [state.phase, state.sectionIndex, state.itemIndex, state.status, section]);
 
-  // Tick de las fases con reloj (avant / apres): nunca acumula drift dentro
-  // de la fase, porque remainingSeconds siempre recalcula desde el deadline.
+  // Tick de las fases con reloj (avant / apres / section-intro): nunca
+  // acumula drift dentro de la fase, porque remainingSeconds siempre
+  // recalcula desde el deadline.
   useEffect(() => {
     if (state.status !== 'running') return;
-    if (state.phase !== 'avant' && state.phase !== 'apres') return;
+    if (state.phase !== 'avant' && state.phase !== 'apres' && state.phase !== 'section-intro') return;
 
     const interval = setInterval(() => {
       const timing = phaseTimingRef.current;
       if (!timing) return;
       setRemaining(remainingSeconds(timing));
       if (isExpired(timing)) {
-        if (state.phase === 'apres') lastApresPhaseTimingRef.current = timing;
+        if (state.phase === 'apres' || state.phase === 'section-intro') lastPhaseTimingRef.current = timing;
         dispatch({ type: 'TIMER_EXPIRED', token: currentToken(stateRef.current) });
       }
     }, TICK_MS);
@@ -191,27 +210,26 @@ const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
     dispatch({ type: 'ABANDON' });
   };
 
-  const handleSectionContinue = () => {
-    lastApresPhaseTimingRef.current = null; // cruzar de sección siempre arranca fresco, no encadenado
-    dispatch({ type: 'SECTION_CONTINUE' });
-  };
-
   const handleRetryAudio = () => {
     dispatch({ type: 'RETRY_AUDIO', token: currentToken(state) });
   };
 
   if (state.status !== 'running') return null;
 
-  if (state.phase === 'section-transition') {
-    const nextSection = set.sections[state.sectionIndex + 1];
-    const nextQuestionCount = nextSection.items.reduce((n, i) => n + i.questions.length, 0);
+  if (state.phase === 'section-intro') {
+    const introSection = set.sections[state.sectionIndex];
+    const introQuestionCount = introSection.items.reduce((n, i) => n + i.questions.length, 0);
     return (
       <div className="space-y-4 text-center py-10">
-        <h3 className="text-xl font-bold">Sección siguiente: {SECTION_LABELS[nextSection.type]}</h3>
-        <p className="text-gray-600">{nextQuestionCount} preguntas</p>
-        <button onClick={handleSectionContinue} className="bg-blue-600 text-white px-6 py-2 rounded">
-          Continuar
-        </button>
+        <h3 className="text-xl font-bold">{SECTION_LABELS[introSection.type]}</h3>
+        <p className="text-gray-600">{introQuestionCount} preguntas</p>
+        <p className="text-blue-800 font-semibold max-w-lg mx-auto px-4">{SECTION_INSTRUCTIONS[introSection.type]}</p>
+        <p className="text-red-600 font-semibold max-w-lg mx-auto px-4">
+          Vous avez {introSection.timing.avant} secondes avant et {introSection.timing.apres} secondes après chaque document sonore pour lire et répondre à la question.
+        </p>
+        <div className="text-center text-4xl font-mono text-red-600">
+          00:{remaining.toString().padStart(2, '0')}
+        </div>
         <button onClick={handleAbandon} className="block mx-auto text-sm text-gray-500 hover:underline">Abandonar</button>
       </div>
     );
