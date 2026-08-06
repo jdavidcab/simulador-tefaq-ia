@@ -16,19 +16,31 @@
 function normalizeWithMap(text) {
   const original = String(text);
   let normalized = '';
-  const map = [];
+  const starts = []; // starts[k] = índice original donde arranca normalized[k]
+  const ends = [];   // ends[k] = índice original (exclusivo) donde termina el rango de normalized[k]
   let inSpaceRun = true; // evita un espacio inicial si el texto empieza con puntuación
 
   for (let i = 0; i < original.length; i += 1) {
     const decomposed = original[i].normalize('NFD').replace(/\p{Diacritic}/gu, '');
+    if (decomposed === '') {
+      // Marca combinatoria suelta (el texto ya venía en forma NFD): se
+      // absorbe en el carácter normalizado anterior, extendiendo su rango
+      // hasta acá, en vez de perderse -- así un span que corta justo
+      // después de esa letra no deja el acento colgando en el segmento
+      // siguiente.
+      if (ends.length > 0) ends[ends.length - 1] = i + 1;
+      continue;
+    }
     for (const dch of decomposed) {
       if (/[\p{L}\p{N}]/u.test(dch)) {
         normalized += dch.toLowerCase();
-        map.push(i);
+        starts.push(i);
+        ends.push(i + 1);
         inSpaceRun = false;
       } else if (!inSpaceRun) {
         normalized += ' ';
-        map.push(i);
+        starts.push(i);
+        ends.push(i + 1);
         inSpaceRun = true;
       }
     }
@@ -36,22 +48,23 @@ function normalizeWithMap(text) {
 
   if (normalized.endsWith(' ')) {
     normalized = normalized.slice(0, -1);
-    map.pop();
+    starts.pop();
+    ends.pop();
   }
 
-  return { normalized, map };
+  return { normalized, starts, ends };
 }
 
 function findFirstMatch(transcript, justification) {
-  const { normalized: normTranscript, map } = normalizeWithMap(transcript);
+  const { normalized: normTranscript, starts, ends } = normalizeWithMap(transcript);
   const { normalized: normJustification } = normalizeWithMap(justification);
   if (!normJustification) return null;
 
   const idx = normTranscript.indexOf(normJustification);
   if (idx === -1) return null;
 
-  const start = map[idx];
-  const end = map[idx + normJustification.length - 1] + 1;
+  const start = starts[idx];
+  const end = ends[idx + normJustification.length - 1];
   return { start, end };
 }
 
