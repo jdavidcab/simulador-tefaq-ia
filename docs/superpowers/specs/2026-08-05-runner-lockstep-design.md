@@ -102,9 +102,10 @@ plus two independent modes:
   failures, and the answers/results payload used by `ExamSummary` all live
   — a single owner for state that previously would have been split
   ambiguously across sibling components.
-- **`exam/SetPicker.jsx`** — presentational: given the list of `complet`
-  sets (fetched by `ExamMode`), lets the user pick one. Owns only its own
-  list-fetch retry UI.
+- **`exam/SetPicker.jsx`** — owns its own `GET /api/sets` fetch (the only
+  thing it fetches), filters to `statut === 'complet'`, and lets the user
+  pick one via an `onSelect(setId)` callback. `ExamMode` takes over from
+  there (set-detail fetch, compatibility, preload, unlock, run, summary).
 - **`exam/ExamRunner.jsx`** — the lockstep engine proper, mounted only once
   `ExamMode` has a validated, fully-preloaded, unlocked set. Drives the
   per-item state machine (via `examMachine.js`) and renders each phase.
