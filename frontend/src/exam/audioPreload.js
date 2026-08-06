@@ -19,8 +19,12 @@ async function fetchAudioBlob(setId, ref, signal) {
 
 // Confirma que el blob es audio reproducible de verdad, no solo que
 // llegaron bytes -- espera loadedmetadata con una duración finita.
-function confirmPlayable(blobUrl) {
+function confirmPlayable(blobUrl, signal) {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException('Aborted', 'AbortError'));
+      return;
+    }
     const probe = new Audio();
     let settled = false;
     const finish = (fn, value) => {
@@ -29,8 +33,10 @@ function confirmPlayable(blobUrl) {
       clearTimeout(timer);
       probe.removeEventListener('loadedmetadata', onLoaded);
       probe.removeEventListener('error', onError);
+      signal?.removeEventListener('abort', onAbort);
       fn(value);
     };
+    const onAbort = () => finish(reject, new DOMException('Aborted', 'AbortError'));
     const onLoaded = () => {
       if (Number.isFinite(probe.duration) && probe.duration > 0) finish(resolve);
       else finish(reject, new Error('Duración de audio no válida'));
@@ -40,6 +46,7 @@ function confirmPlayable(blobUrl) {
       () => finish(reject, new Error('Tiempo de espera agotado al validar audio')),
       AUDIO_LOAD_TIMEOUT_MS,
     );
+    signal?.addEventListener('abort', onAbort);
     probe.addEventListener('loadedmetadata', onLoaded);
     probe.addEventListener('error', onError);
     probe.src = blobUrl;
@@ -62,7 +69,7 @@ export async function preloadSetAudio({ setId, refs, concurrency = 4, signal, on
       try {
         const blob = await fetchAudioBlob(setId, ref, signal);
         blobUrl = URL.createObjectURL(blob);
-        await confirmPlayable(blobUrl);
+        await confirmPlayable(blobUrl, signal);
         urls.set(ref, blobUrl);
       } catch (error) {
         if (blobUrl) URL.revokeObjectURL(blobUrl); // siempre revocar, incluso si el fallo fue por abort

@@ -84,19 +84,20 @@ const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
   useEffect(() => {
     if (state.status !== 'running' || !section) return;
     if (state.phase === 'avant') {
-      if (lastApresPhaseTimingRef.current) {
-        // Encadenar es correcto para el slop de detección de ~TICK_MS que
-        // este mecanismo espera. Pero si la pestaña estuvo en background
-        // durante 'apres' (sin audio sonando, nada la mantiene en primer
-        // plano), Chrome puede throttlear el interval a 1/s o 1/min, y para
-        // cuando el tick realmente corre el deadline encadenado ya venció
-        // hace rato -- encadenar sobre eso robaría toda la ventana de
-        // lectura del ítem siguiente. Si ya venció, arrancar fresco.
-        const chained = chainDeadline(lastApresPhaseTimingRef.current, section.timing.avant);
-        phaseTimingRef.current = isExpired(chained) ? startPhase(section.timing.avant) : chained;
-      } else {
-        phaseTimingRef.current = startPhase(section.timing.avant);
-      }
+      // Encadenar SIEMPRE desde el deadline teórico del apres anterior, nunca
+      // desde "ahora" -- así el tick que detectó el vencimiento (hasta TICK_MS
+      // tarde, o mucho más si la pestaña estuvo en background y el navegador
+      // throttleó el interval) nunca regala tiempo extra. Si el deadline
+      // encadenado ya venció para cuando este efecto corre, el próximo tick
+      // lo detecta como vencido de inmediato y avanza -- ocultar la pestaña
+      // durante un examen estricto en lockstep no debe generar una ventana de
+      // lectura nueva y completa, sería explotable. Si algún día se decide que
+      // ocultar la pestaña debe PAUSAR el examen, eso necesita ser una
+      // decisión de producto explícita y su propio mecanismo (p.ej.
+      // visibilitychange), no un efecto secundario de esta aritmética.
+      phaseTimingRef.current = lastApresPhaseTimingRef.current
+        ? chainDeadline(lastApresPhaseTimingRef.current, section.timing.avant)
+        : startPhase(section.timing.avant);
       lastApresPhaseTimingRef.current = null;
       setRemaining(remainingSeconds(phaseTimingRef.current));
     } else if (state.phase === 'apres') {
@@ -239,9 +240,11 @@ const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
         <button onClick={handleAbandon} className="text-red-600 hover:underline">Abandonar</button>
       </div>
 
-      <div className="text-center text-4xl font-mono text-red-600">
-        00:{remaining.toString().padStart(2, '0')}
-      </div>
+      {(state.phase === 'avant' || state.phase === 'apres') && (
+        <div className="text-center text-4xl font-mono text-red-600">
+          00:{remaining.toString().padStart(2, '0')}
+        </div>
+      )}
 
       {state.phase === 'audio-pending' && <p className="text-center text-blue-600">Preparando audio...</p>}
       {state.phase === 'audio-playing' && <p className="text-center text-blue-600">Escuchando...</p>}

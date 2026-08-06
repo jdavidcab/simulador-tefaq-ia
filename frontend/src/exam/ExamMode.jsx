@@ -7,7 +7,7 @@ import { preloadSetAudio, revokeAudioUrls } from './audioPreload';
 
 const API_BASE = 'http://localhost:3001';
 const ACTIVE_PHASES = new Set(['preloading', 'unlock', 'running']);
-const GUARDED_PHASES = new Set(['preloading', 'unlock', 'running', 'summary']);
+const GUARDED_PHASES = new Set(['preloading', 'unlock', 'running']);
 
 const ExamMode = ({ onActiveChange }) => {
   const [phase, setPhase] = useState('picker');
@@ -22,6 +22,8 @@ const ExamMode = ({ onActiveChange }) => {
   const audioElRef = useRef(null);
   const audioUrlsRef = useRef(new Map());
   const preloadAbortRef = useRef(null);
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
 
   useEffect(() => {
     onActiveChange?.(ACTIVE_PHASES.has(phase));
@@ -74,17 +76,24 @@ const ExamMode = ({ onActiveChange }) => {
   // de que React re-renderice, así que un runPreload cerrado sobre el estado
   // vería todavía el setId ANTERIOR (null en la primera selección).
   const runPreload = useCallback(async (refs, id) => {
-    preloadAbortRef.current = new AbortController();
+    const controller = new AbortController();
+    preloadAbortRef.current = controller;
     setPhase('preloading');
     const { urls, failedRefs: failed } = await preloadSetAudio({
       setId: id,
       refs,
-      signal: preloadAbortRef.current.signal,
+      signal: controller.signal,
       onProgress: setPreloadProgress,
     });
-    // preloadSetAudio resuelve normalmente incluso si se abortó (goToPicker
-    // ya reseteó phase/estado): no pisar eso con el resultado obsoleto.
-    if (preloadAbortRef.current?.signal.aborted) return;
+    // Compara la identidad de ESTA llamada, no el ref mutable: si mientras
+    // esperábamos, otra llamada a runPreload ya reemplazó preloadAbortRef.current
+    // con un controller nuevo, esta resolución es obsoleta -- no debe tocar el
+    // estado de la operación nueva, ni siquiera si su propio controller nunca
+    // se abortó explícitamente. Revocar lo descargado: nadie más lo hará.
+    if (controller.signal.aborted || preloadAbortRef.current !== controller) {
+      revokeAudioUrls(urls);
+      return;
+    }
     for (const [ref, url] of urls) audioUrlsRef.current.set(ref, url);
     if (failed.length > 0) {
       setFailedRefs(failed);
@@ -100,7 +109,9 @@ const ExamMode = ({ onActiveChange }) => {
     setPhase('loading');
     try {
       const res = await fetch(`${API_BASE}/api/sets/${chosenId}`);
+      if (!mountedRef.current) return;
       const data = await res.json();
+      if (!mountedRef.current) return;
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
       const compatibility = checkSetCompatibility(data);
       if (!compatibility.ok) {
@@ -112,6 +123,7 @@ const ExamMode = ({ onActiveChange }) => {
       const refs = data.sections.flatMap(section => section.items.map(item => item.ref));
       await runPreload(refs, chosenId);
     } catch (error) {
+      if (!mountedRef.current) return;
       setLoadError(error.message);
       setPhase('loading-error');
     }
@@ -148,9 +160,10 @@ const ExamMode = ({ onActiveChange }) => {
   }, [setDetail]);
 
   const handleComplete = useCallback((finalResults) => {
+    resetAudio();
     setResults(finalResults);
     setPhase('summary');
-  }, []);
+  }, [resetAudio]);
 
   const totalsBySection = setDetail
     ? Object.fromEntries(
@@ -219,6 +232,9 @@ const ExamMode = ({ onActiveChange }) => {
           <p className="text-green-700">Audio listo.</p>
           <button onClick={handleUnlock} className="bg-blue-600 text-white px-6 py-3 rounded text-lg">
             Comenzar examen
+          </button>
+          <button onClick={goToPicker} className="block mx-auto text-sm text-gray-500 hover:underline">
+            Cancelar / Volver a la lista
           </button>
         </div>
       )}
