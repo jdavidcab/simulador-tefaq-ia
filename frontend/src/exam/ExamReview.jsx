@@ -90,10 +90,19 @@ const ExamReview = ({ set, answers, audioElRef, audioUrls, onBackToSummary, onEx
       return;
     }
     setPlayback({ activeRef: ref, status: 'idle', error: null });
-    audioEl.src = url;
-    audioEl.currentTime = 0;
+    try {
+      audioEl.src = url;
+      audioEl.currentTime = 0;
+    } catch {
+      setPlayback(prev => (prev.activeRef === ref
+        ? { activeRef: ref, status: 'error', error: 'No se pudo reproducir el audio' }
+        : prev));
+      return;
+    }
     Promise.resolve(audioEl.play()).catch(() => {
-      setPlayback({ activeRef: ref, status: 'error', error: 'No se pudo reproducir el audio' });
+      setPlayback(prev => (prev.activeRef === ref
+        ? { activeRef: ref, status: 'error', error: 'No se pudo reproducir el audio' }
+        : prev));
     });
   };
 
