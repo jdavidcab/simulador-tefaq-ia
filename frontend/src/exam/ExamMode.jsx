@@ -22,8 +22,18 @@ const ExamMode = ({ onActiveChange }) => {
   const audioElRef = useRef(null);
   const audioUrlsRef = useRef(new Map());
   const preloadAbortRef = useRef(null);
+  // El cuerpo del efecto (no solo su cleanup) tiene que volver a poner
+  // mountedRef.current = true: bajo React.StrictMode (dev), React monta ->
+  // desmonta -> vuelve a montar cada componente una vez a propósito. Ese
+  // desmontaje simulado ejecuta el cleanup ANTES de que el usuario haga
+  // nada, dejando mountedRef.current en false para siempre si el efecto no
+  // lo reafirma al (re)montar -- lo que convertía cada guard de abajo en un
+  // no-op permanente y dejaba handleSelect trabado en 'loading'.
   const mountedRef = useRef(true);
-  useEffect(() => () => { mountedRef.current = false; }, []);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   useEffect(() => {
     onActiveChange?.(ACTIVE_PHASES.has(phase));
