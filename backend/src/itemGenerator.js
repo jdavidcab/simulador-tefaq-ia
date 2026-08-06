@@ -44,10 +44,13 @@ function normalizeFeedback(feedback, correctId) {
   const text = feedback.trim();
   const fallback = `La opción ${correctId} es correcta según lo que se dice en el audio.`;
 
-  // Señal fuerte: "opción B" / "option A" / "L'option B" (con o sin elisión,
-  // singular o plural) -- siempre se trata como referencia a una letra, sin
-  // importar qué palabra sigue.
-  const conMarcador = /\b(?:opci[oó]n(?:es)?|l['’]?options?|options?)\s+[ABCD]\b/i.test(text);
+  // Señal fuerte: "opción B" / "distractor B" / "option A" / "L'option B" /
+  // "réponse C" (con o sin elisión, singular o plural) -- siempre se trata
+  // como referencia a una letra, sin importar qué palabra sigue. "distractor"
+  // se añadió tras encontrar en contenido real generado feedback del tipo
+  // "El distractor B mezcla..." que la señal débil (letraSuelta) no detecta,
+  // porque la letra sigue en una palabra en minúscula.
+  const conMarcador = /\b(?:opci[oó]n(?:es)?|distractors?|distracteurs?|l['’]?options?|options?|r[eé]ponses?|respuestas?)\s+[ABCD]\b/i.test(text);
   // Señal débil: una letra suelta que NO continúa en una palabra en
   // minúscula justo después. Esto distingue "es correcta la A." (letra
   // aislada, cuenta) de "A pesar de" o "vitamina C como" (la letra sigue en

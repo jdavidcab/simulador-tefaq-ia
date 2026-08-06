@@ -269,6 +269,34 @@ test('descarta el razonamiento si el feedback menciona una letra con marcador "o
   assert.match(feedback, new RegExp(`^La opción ${item.questions[0].correctId} es correcta según lo que se dice en el audio\\.$`), `debe descartar el razonamiento pese a que "est" sigue a la letra: "${feedback}"`);
 });
 
+test('descarta el razonamiento si el feedback dice "el distractor B" (marcador sin "opción"/"option")', async () => {
+  const conDistractor = JSON.stringify({
+    transcript: Array.from({ length: 45 }, (_, i) => `mot${i}`).join(' '),
+    questions: [{
+      prompt: 'Quel est le message principal ?',
+      options: [
+        { id: 'A', text: 'Une première option plausible' },
+        { id: 'B', text: 'Une deuxième option plausible' },
+        { id: 'C', text: 'Une troisième option plausible' },
+        { id: 'D', text: 'Une quatrième option plausible' },
+      ],
+      correctId: 'A',
+      // Caso real encontrado en contenido generado: "el distractor B mezcla..."
+      // -- la letra sigue en una palabra en minúscula ("mezcla"), así que
+      // letraSuelta no la detecta; hace falta que "distractor" cuente como
+      // marcador igual que "opción"/"option".
+      feedback: 'El distractor B mezcla la idea de salario durante la formación con una condición que no se menciona en el audio.',
+      justification: 'mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9',
+    }],
+  });
+  const proveedor = proveedorFake('gemini', [conDistractor]);
+  const generador = createItemGenerator({ gemini: proveedor }, CONFIG);
+  const item = await generador.generateItem({ ...BASE, selector: ['gemini'] });
+
+  const feedback = item.questions[0].feedback;
+  assert.match(feedback, new RegExp(`^La opción ${item.questions[0].correctId} es correcta según lo que se dice en el audio\\.$`), `debe descartar el razonamiento pese a que la letra sigue a "distractor", no a "opción": "${feedback}"`);
+});
+
 test('no baraja las opciones de micro_trottoir (son fijas y en orden)', async () => {
   const posturas = ['totalement pour', 'pour à certaines conditions', 'totalement contre'];
   const gemini = proveedorFake('gemini', [itemJsonMicroTrottoir({ postureCorrecta: posturas[1] })]);
