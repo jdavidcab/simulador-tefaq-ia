@@ -111,16 +111,22 @@ const ExamMode = ({ onActiveChange }) => {
 
   const handleUnlock = useCallback(async () => {
     const audioEl = audioElRef.current;
+    const firstRef = setDetail?.sections?.[0]?.items?.[0]?.ref;
+    const firstUrl = firstRef ? audioUrlsRef.current.get(firstRef) : null;
+    if (firstUrl) audioEl.src = firstUrl;
     audioEl.muted = true;
     try {
       await audioEl.play();
       audioEl.pause();
+    } catch {
+      // Un rechazo aquí no es fatal: ExamRunner reintenta la reproducción real
+      // del primer ítem con su propio manejo de AUDIO_FAILED.
     } finally {
       audioEl.muted = false;
       audioEl.currentTime = 0;
     }
     setPhase('running');
-  }, []);
+  }, [setDetail]);
 
   const handleComplete = useCallback((finalResults) => {
     setResults(finalResults);
