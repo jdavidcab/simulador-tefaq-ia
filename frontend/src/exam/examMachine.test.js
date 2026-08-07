@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createInitialState, reducer, currentToken, computeResults } from './examMachine.js';
+import { createInitialState, reducer, currentToken, computeResults, countAnswered } from './examMachine.js';
 
 // Set mínimo con dos secciones: la primera de 1-pregunta-por-audio (2 ítems,
 // para cubrir el avance dentro de la sección), la segunda de 2 preguntas por
@@ -215,4 +215,37 @@ test('ABANDON detiene la máquina desde cualquier fase; eventos posteriores son 
   assert.equal(state.status, 'abandoned');
   const after = dispatch(set, state, { type: 'TIMER_EXPIRED', token: currentToken(state) });
   assert.equal(after, state, 'nada debe mover un estado ya abandonado');
+});
+
+test('countAnswered cuenta preguntas respondidas, no ítems', () => {
+  const set = fixtureSet();
+  let state = skipIntro(set, createInitialState());
+  assert.equal(countAnswered(state.answers), 0);
+
+  state = dispatch(set, state, { type: 'ANSWER_SELECTED', token: currentToken(state), questionIndex: 0, optionId: 'A' });
+  assert.equal(countAnswered(state.answers), 1);
+
+  state = runItemToApres(set, state);
+  state = dispatch(set, state, { type: 'TIMER_EXPIRED', token: currentToken(state) }); // -> item 2, sin responder
+  assert.equal(countAnswered(state.answers), 1, 'avanzar de ítem sin responder no suma');
+
+  state = dispatch(set, state, { type: 'TIMER_EXPIRED', token: currentToken(state) }); // -> audio-pending
+  state = dispatch(set, state, { type: 'ANSWER_SELECTED', token: currentToken(state), questionIndex: 0, optionId: 'B' });
+  assert.equal(countAnswered(state.answers), 2, 'segundo ítem respondido suma, sin pisar el primero');
+});
+
+test('countAnswered cuenta cada pregunta de un ítem multi-pregunta por separado', () => {
+  const set = fixtureSet();
+  let state = skipIntro(set, createInitialState());
+  state = runItemToApres(set, state);
+  state = dispatch(set, state, { type: 'TIMER_EXPIRED', token: currentToken(state) });
+  state = runItemToApres(set, state);
+  state = dispatch(set, state, { type: 'TIMER_EXPIRED', token: currentToken(state) }); // section-intro (sección 1)
+  state = dispatch(set, state, { type: 'TIMER_EXPIRED', token: currentToken(state) }); // -> avant, interview
+
+  state = runItemToApres(set, state);
+  state = dispatch(set, state, { type: 'ANSWER_SELECTED', token: currentToken(state), questionIndex: 0, optionId: 'A' });
+  assert.equal(countAnswered(state.answers), 1);
+  state = dispatch(set, state, { type: 'ANSWER_SELECTED', token: currentToken(state), questionIndex: 1, optionId: 'C' });
+  assert.equal(countAnswered(state.answers), 2, 'las 2 preguntas del mismo ítem cuentan por separado');
 });

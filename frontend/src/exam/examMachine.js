@@ -133,3 +133,13 @@ export function computeResults(set, answers) {
   }
   return { answers, correctBySection, correctTotal };
 }
+
+export function countAnswered(answers) {
+  let count = 0;
+  for (const itemsByRef of Object.values(answers)) {
+    for (const questionsByIndex of Object.values(itemsByRef)) {
+      count += Object.keys(questionsByIndex).length;
+    }
+  }
+  return count;
+}
