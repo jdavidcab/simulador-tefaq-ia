@@ -381,11 +381,11 @@ const ExamRunner = ({ set, audioElRef, audioUrls, imageUrls, onComplete, onAband
                             return (
                               <label
                                 key={opt.id}
-                                className={`flex-1 min-w-[100px] flex flex-col items-center gap-2 p-3 rounded cursor-pointer ${selected ? 'bg-gray-200' : 'hover:bg-gray-50'}`}
+                                className={`flex-1 min-w-[160px] flex flex-col items-center gap-2 p-3 rounded cursor-pointer ${selected ? 'bg-gray-200' : 'hover:bg-gray-50'}`}
                               >
                                 {url
-                                  ? <img src={url} alt={`Option ${opt.id}`} className="w-16 h-16 object-contain" />
-                                  : <div className="w-16 h-16 bg-gray-100" />}
+                                  ? <img src={url} alt={`Option ${opt.id}`} className="w-36 h-20 object-contain" />
+                                  : <div className="w-36 h-20 bg-gray-100" />}
                                 <input
                                   type="radio"
                                   name={`${item.ref}-q${questionIndex}`}

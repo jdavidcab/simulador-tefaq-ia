@@ -64,6 +64,10 @@ const ExamMode = ({ onActiveChange }) => {
   const resetAudio = useCallback(() => {
     revokeAudioUrls(audioUrlsRef.current);
     audioUrlsRef.current = new Map();
+    // Las URLs de imagen no tienen ciclo de revoke (ver imagePreload.js), pero
+    // igual hay que vaciar el mapa aquí: si no, claves de un set elegido
+    // anteriormente se acumulan indefinidamente entre selecciones de set.
+    imageUrlsRef.current = new Map();
     setFailedRefs([]);
     setPreloadProgress({ done: 0, total: 0 });
     if (audioElRef.current) {
@@ -124,6 +128,12 @@ const ExamMode = ({ onActiveChange }) => {
       revokeAudioUrls(audioResult.urls);
       return;
     }
+    // Un reintento (handleRetryFailed) llega aquí con audioUrlsRef.current ya
+    // poblado de un intento anterior -- revocar y vaciar ANTES de repoblar,
+    // si no las URLs viejas quedan huérfanas (nadie las revoca nunca) y cada
+    // click en "Reintentar fallidos" filtra ~un set entero de blobs de audio.
+    revokeAudioUrls(audioUrlsRef.current);
+    audioUrlsRef.current = new Map();
     for (const [ref, url] of audioResult.urls) audioUrlsRef.current.set(ref, url);
     for (const [key, url] of imageResult.urls) imageUrlsRef.current.set(key, url);
 

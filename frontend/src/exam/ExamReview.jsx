@@ -216,7 +216,7 @@ const ExamReview = ({ set, answers, audioElRef, audioUrls, onBackToSummary, onEx
                               const isChosenOpt = opt.id === question.selectedId;
                               let stateLabel = null;
                               let className = section.type === 'conversation_image'
-                                ? 'p-2 border rounded flex flex-col items-center gap-1 min-w-[90px]'
+                                ? 'p-2 border rounded flex flex-col items-center gap-1 min-w-[160px]'
                                 : 'p-2 border rounded';
                               if (isCorrectOpt && isChosenOpt) {
                                 stateLabel = 'Tu respuesta — correcta';
@@ -229,14 +229,14 @@ const ExamReview = ({ set, answers, audioElRef, audioUrls, onBackToSummary, onEx
                                 className += ' border-red-400 bg-red-50';
                               }
                               if (section.type === 'conversation_image') {
-                                const imagen = setItem.images.find(img => img.id === opt.id);
+                                const imagen = (setItem.images ?? []).find(img => img.id === opt.id);
                                 return (
                                   <div key={opt.id} className={className}>
                                     {imagen && (
                                       <img
                                         src={`${API_BASE}/api/sets/${set.id}/${imagen.path}`}
                                         alt={`Option ${opt.id}`}
-                                        className="w-16 h-16 object-contain"
+                                        className="w-36 h-20 object-contain"
                                       />
                                     )}
                                     {stateLabel && <span className="text-xs font-semibold text-center">{stateLabel}</span>}
