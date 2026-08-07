@@ -43,7 +43,7 @@ function confirmLoadable(url, signal) {
 }
 
 // `images`: array de { key, path } -- key es `${ref}-${optionId}`, path es
-// item.images[i].path (relativo, ej. "images/s1i1-A.png").
+// item.images[i].path (relativo, ej. "images/s1i1-A.jpg").
 export async function preloadSetImages({ setId, images, concurrency = 4, signal, onProgress }) {
   const urls = new Map();
   const failedKeys = [];
