@@ -353,7 +353,6 @@ const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
             <tr>
               <td className="w-[300px] align-top py-2 pr-6">
                 {state.phase === 'audio-pending' && <p className="text-center text-blue-600 mb-2 text-sm">Préparation de l'audio...</p>}
-                {state.phase === 'audio-playing' && <p className="text-center text-blue-600 mb-2 text-sm">Écoute en cours...</p>}
                 <div className="relative h-[22px] bg-gray-400 rounded overflow-hidden">
                   <div
                     className="absolute inset-y-0 left-0 bg-gray-500"
