@@ -36,7 +36,11 @@ export function createImageSynth({ apiKey, fetchImpl = fetch }) {
       }
 
       const data = await response.json();
-      const base64 = data?.steps?.[0]?.content
+      // A diferencia de TTS (un solo step), este modelo antepone un step de
+      // tipo "thought" (sin "content") antes del step real con la imagen --
+      // buscar el primer step que SÍ trae "content", no asumir steps[0].
+      const step = data?.steps?.find(s => Array.isArray(s?.content));
+      const base64 = step?.content
         ?.find(content => content?.type === 'image' || content?.mime_type?.startsWith('image/'))?.data;
       if (!base64) throw new Error(`${IMAGE_MODEL}: respuesta sin datos de imagen`);
 
