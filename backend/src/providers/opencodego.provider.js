@@ -2,7 +2,7 @@ const BASE_URL = 'https://opencode.ai/zen/go/v1';
 const DEFAULT_TIMEOUT_MS = 120000; // margen amplio para modelos más lentos del gateway
 
 // Strategy genérica: cualquier modelo del gateway OpenCode Go (OpenAI-compatible).
-// La misma clase se instancia por modelo (deepseek-v4-flash, mimo-v2.5, mimo-v2.5-pro, ...).
+// La misma clase se instancia por modelo (deepseek-v4-pro, mimo-v2.5, mimo-v2.5-pro, ...).
 export function createOpenCodeGoProvider(apiKey, modelId, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
   return {
     name: modelId,

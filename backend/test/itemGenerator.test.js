@@ -108,6 +108,8 @@ test('esFalloDeCuotaORed distingue los dos tipos de fallo', () => {
   assert.equal(esFalloDeCuotaORed(new Error('fetch failed')), true);
   assert.equal(esFalloDeCuotaORed(new Error('"transcript" fuera de rango: 500 palabras')), false);
   assert.equal(esFalloDeCuotaORed(errorHttp(400)), false);
+  assert.equal(esFalloDeCuotaORed(errorHttp(401)), true);
+  assert.equal(esFalloDeCuotaORed(errorHttp(403)), true);
 });
 
 test('si toda la cadena falla, lanza con el detalle de lo intentado', async () => {
