@@ -61,6 +61,6 @@ export function pickCategories(rng, recentPlans, count) {
       .map(entry => entry.topicId),
   );
   const pool = IMAGE_CATEGORIES.filter(cat => !previousIds.has(cat.id));
-  const disponibles = pool.length > 0 ? pool : IMAGE_CATEGORIES;
-  return sampleWithoutReplacement(rng, disponibles, Math.min(count, disponibles.length));
+  const disponibles = pool.length >= count ? pool : IMAGE_CATEGORIES;
+  return sampleWithoutReplacement(rng, disponibles, count);
 }

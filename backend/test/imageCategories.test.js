@@ -53,7 +53,7 @@ test('pickCategories con más de un plan reciente solo mira el más reciente (re
   const rng = createRng(1);
   const masReciente = [{ sectionType: 'conversation_image', topicId: 'transports' }];
   const viejo = [{ sectionType: 'conversation_image', topicId: 'objets_produits' }];
-  const elegidas = pickCategories(rng, [masReciente, viejo], 8);
+  const elegidas = pickCategories(rng, [masReciente, viejo], 7);
   assert.ok(!elegidas.some(c => c.id === 'transports'));
   assert.ok(elegidas.some(c => c.id === 'objets_produits'));
 });
