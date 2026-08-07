@@ -87,8 +87,12 @@ async function main() {
 
   const providers = createProviders();
   const generator = createItemGenerator(providers);
-  const synth = createSynth({ apiKey: process.env.TTS_GEMINI_API_KEY || process.env.GEMINI_API_KEY, voices: ['Kore', 'Charon', 'Puck'] });
-  const imageSynth = createImageSynth({ apiKey: process.env.GEMINI_API_KEY });
+  const ttsApiKey = process.env.TTS_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+  const synth = createSynth({ apiKey: ttsApiKey, voices: ['Kore', 'Charon', 'Puck'] });
+  // Comparte cuota con TTS (separada de la del texto), mismo motivo que
+  // server.js: los modelos de generación de imagen suelen tener un tier
+  // gratuito mucho más estricto que los de texto.
+  const imageSynth = createImageSynth({ apiKey: ttsApiKey });
   const pipeline = createPipeline({ dataDir: DATA_DIR, generator, synth, imageSynth });
 
   const resultado = await pipeline.run(SET_ID);

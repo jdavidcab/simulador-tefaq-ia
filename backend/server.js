@@ -31,7 +31,10 @@ const TTS_API_KEY = process.env.TTS_GEMINI_API_KEY || process.env.GEMINI_API_KEY
 const DATA_DIR = fileURLToPath(new URL('./data/', import.meta.url));
 const generator = createItemGenerator(providers);
 const synth = createSynth({ apiKey: TTS_API_KEY, voices: TTS_VOICES });
-const imageSynth = createImageSynth({ apiKey: process.env.GEMINI_API_KEY });
+// Comparte cuota con TTS (separada de la del texto) en vez de con
+// GEMINI_API_KEY -- los modelos de generación de imagen suelen tener un
+// tier gratuito mucho más estricto que los de texto.
+const imageSynth = createImageSynth({ apiKey: TTS_API_KEY });
 const pipeline = createPipeline({ dataDir: DATA_DIR, generator, synth, imageSynth });
 
 // El modo entrenamiento sigue usando el formato de una sola pregunta corta.
