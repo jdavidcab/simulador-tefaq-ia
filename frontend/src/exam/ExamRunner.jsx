@@ -72,16 +72,18 @@ const OptionSelect = ({ options, value, onChange }) => {
 };
 
 const ProgressTabs = ({ tabs }) => (
-  <div className="flex gap-1" aria-hidden="true">
+  <div className="flex gap-0.5" aria-hidden="true">
     {tabs.map((tab, i) => (
       <div
         key={i}
-        className={`h-2 flex-1 rounded-sm ${
-          tab.status === 'completed' ? 'bg-blue-600'
-            : tab.status === 'current' ? 'bg-blue-400'
-              : 'bg-gray-200'
+        className={`flex-1 h-5 rounded-sm flex items-center justify-center text-[9px] leading-none font-semibold ${
+          tab.status === 'completed' ? 'bg-blue-600 text-white'
+            : tab.status === 'current' ? 'bg-blue-400 text-white'
+              : 'bg-gray-200 text-gray-500'
         }`}
-      />
+      >
+        {i + 1}
+      </div>
     ))}
   </div>
 );
