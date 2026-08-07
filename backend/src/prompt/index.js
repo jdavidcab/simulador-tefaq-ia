@@ -1,5 +1,6 @@
 import { SECTION_PRESETS } from '../examFormat.js';
 import { pickTefaqPattern } from '../tefaqPatterns.js';
+import { build as conversation_image } from './sections/conversation_image.js';
 import { build as annonce_publique } from './sections/annonce_publique.js';
 import { build as repondeur } from './sections/repondeur.js';
 import { build as micro_trottoir } from './sections/micro_trottoir.js';
@@ -9,13 +10,13 @@ import { build as reportage } from './sections/reportage.js';
 import { build as divers } from './sections/divers.js';
 
 const CONSTRUCTORES = {
-  annonce_publique, repondeur, micro_trottoir, chronique, interview, reportage, divers,
+  conversation_image, annonce_publique, repondeur, micro_trottoir, chronique, interview, reportage, divers,
 };
 
 export function buildSectionPrompt(sectionType, opts = {}) {
   const build = CONSTRUCTORES[sectionType];
   if (!build) {
-    throw new Error(`No hay constructor de prompt para "${sectionType}" (conversation_image llega en el slice 4)`);
+    throw new Error(`No hay constructor de prompt para "${sectionType}"`);
   }
 
   const preset = SECTION_PRESETS[sectionType];

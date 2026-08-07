@@ -18,8 +18,17 @@ test('hay constructor para las 7 secciones generables', () => {
   }
 });
 
-test('conversation_image no tiene constructor todavía', () => {
-  assert.throws(() => buildSectionPrompt('conversation_image', BASE), /conversation_image/);
+test('buildSectionPrompt genera un prompt para conversation_image', () => {
+  const prompt = buildSectionPrompt('conversation_image', {
+    topic: 'Comida y contextos alimenticios: restaurante, mercado, preparación de un plato.',
+    minWords: 40,
+    maxWords: 55,
+  });
+  assert.match(prompt, /conversation_image/);
+  assert.match(prompt, /imagePrompt/);
+  assert.match(prompt, /40-55 palabras/);
+  assert.match(prompt, /objeto principal/); // una de las 6 dimensiones
+  assert.doesNotMatch(prompt, /undefined/);
 });
 
 test('el prompt lleva el tema y el rango de palabras del preset', () => {

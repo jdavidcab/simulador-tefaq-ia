@@ -60,6 +60,15 @@ function validarInterview(item) {
   }
 }
 
+function validarConversationImage(item) {
+  const question = item.questions[0];
+  for (const option of question.options) {
+    if (typeof option.imagePrompt !== 'string' || !option.imagePrompt.trim()) {
+      throw new Error('conversation_image: cada opción requiere "imagePrompt" no vacío');
+    }
+  }
+}
+
 export function validateItem(item, sectionType, opts = {}) {
   const config = opts.config ?? DEFAULT_CONFIG;
   const preset = SECTION_PRESETS[sectionType];
@@ -88,6 +97,7 @@ export function validateItem(item, sectionType, opts = {}) {
 
   if (sectionType === 'micro_trottoir') validarMicroTrottoir(item, opts.posture, config);
   if (sectionType === 'interview') validarInterview(item);
+  if (sectionType === 'conversation_image') validarConversationImage(item);
 
   return item;
 }

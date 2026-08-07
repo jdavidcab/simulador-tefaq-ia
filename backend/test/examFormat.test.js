@@ -19,7 +19,7 @@ test('los presets llevan los tiempos y rangos del livret oficial', () => {
   });
   assert.deepEqual(SECTION_PRESETS.conversation_image, {
     bloc: 1, questions: 4, avant: 5, apres: 10,
-    questionsPerAudio: 1, minWords: 40, maxWords: 70, lectures: 1,
+    questionsPerAudio: 1, minWords: 40, maxWords: 55, lectures: 1,
   });
   assert.equal(SECTION_PRESETS.divers.questions, 10);
   assert.equal(SECTION_PRESETS.reportage.questionsPerAudio, 2);
