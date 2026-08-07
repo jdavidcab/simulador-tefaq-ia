@@ -35,10 +35,44 @@ test('rechaza un set con pilotos', () => {
   assert.match(result.reason, /pilotos/);
 });
 
-test('rechaza un formato distinto de SET_STANDARD_36', () => {
-  const result = checkSetCompatibility(validSet({ format: 'SET_STANDARD_40' }));
+test('rechaza un formato desconocido', () => {
+  const result = checkSetCompatibility(validSet({ format: 'FORMATO_INVENTADO' }));
   assert.equal(result.ok, false);
   assert.match(result.reason, /Formato/);
+});
+
+const COMPOSITION_40 = [
+  { type: 'conversation_image', items: 4, questionsPerItem: 1 },
+  ...COMPOSITION,
+];
+
+function validSet40(overrides = {}) {
+  const sections = COMPOSITION_40.map(({ type, items, questionsPerItem }) => ({
+    type,
+    items: Array.from({ length: items }, (_, i) => ({
+      ref: `${type}-${i}`,
+      questions: Array.from({ length: questionsPerItem }, () => ({ correctId: 'A' })),
+    })),
+  }));
+  return { format: 'SET_STANDARD_40', pilotes: false, sections, ...overrides };
+}
+
+test('acepta un set 36/40 sin pilotos', () => {
+  assert.deepEqual(checkSetCompatibility(validSet40()), { ok: true });
+});
+
+test('rechaza un SET_STANDARD_40 con menos de 36 ítems', () => {
+  const set = validSet40();
+  set.sections[0].items = set.sections[0].items.slice(0, 1);
+  const result = checkSetCompatibility(set);
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /36/);
+});
+
+test('rechaza un SET_STANDARD_40 con pilotos', () => {
+  const result = checkSetCompatibility(validSet40({ pilotes: true }));
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /pilotos/);
 });
 
 test('rechaza un set con menos de 32 ítems', () => {
