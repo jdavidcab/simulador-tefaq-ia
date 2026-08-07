@@ -24,6 +24,10 @@ export function createImageSynth({ apiKey, fetchImpl = fetch }) {
         body: JSON.stringify({
           model: IMAGE_MODEL,
           input,
+          // Ambos valores fueron verificados contra la API real, no son
+          // arbitrarios: 'image/jpeg' ('image/png' devuelve HTTP 400) y
+          // '512' como string pelado ('512px' devuelve HTTP 400). No
+          // "corregir" esto pensando que es un typo.
           response_format: { type: 'image', mime_type: 'image/jpeg', image_size: '512' },
         }),
       });

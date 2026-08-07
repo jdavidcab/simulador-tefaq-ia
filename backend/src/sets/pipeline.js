@@ -214,7 +214,7 @@ export function createPipeline({ dataDir, generator, synth, imageSynth, catalog 
                 await writeSet(dataDir, set);
               }
 
-              if (item.images.length === 4) item.etat = 'pret';
+              if (item.images.length === item.questions[0].options.length) item.etat = 'pret';
               delete item.erreur;
               await writeSet(dataDir, set);
             } catch (error) {
