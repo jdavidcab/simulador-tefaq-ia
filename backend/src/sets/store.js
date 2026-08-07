@@ -9,6 +9,10 @@ export function audioDir(dataDir, setId) {
   return join(setDir(dataDir, setId), 'audio');
 }
 
+export function imagesDir(dataDir, setId) {
+  return join(setDir(dataDir, setId), 'images');
+}
+
 export function nuevoSetId(fecha = new Date()) {
   const dia = fecha.toISOString().slice(0, 10);
   const sufijo = Math.random().toString(36).slice(2, 6).padEnd(4, '0');
@@ -20,6 +24,7 @@ export function nuevoSetId(fecha = new Date()) {
 export async function writeSet(dataDir, set) {
   const dir = setDir(dataDir, set.id);
   await mkdir(join(dir, 'audio'), { recursive: true });
+  await mkdir(join(dir, 'images'), { recursive: true });
   const destino = join(dir, 'set.json');
   const sufijo = `${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
   const temporal = `${destino}.${sufijo}.tmp`;
