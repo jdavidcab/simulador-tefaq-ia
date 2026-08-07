@@ -225,7 +225,6 @@ const ExamReview = ({ set, answers, audioElRef, audioUrls, onBackToSummary, onEx
                               }
                               return (
                                 <div key={opt.id} className={className}>
-                                  <span className="font-bold mr-2">{opt.id})</span>
                                   {opt.text}
                                   {stateLabel && (
                                     <span className="ml-2 text-xs font-semibold">{stateLabel}</span>

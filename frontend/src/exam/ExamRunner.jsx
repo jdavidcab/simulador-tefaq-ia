@@ -51,9 +51,7 @@ const OptionSelect = ({ options, value, onChange }) => {
         onClick={() => setOpen(prev => !prev)}
         className="w-full text-left border rounded px-3 py-2 bg-white"
       >
-        {selected
-          ? <span><span className="font-bold mr-2">{selected.id})</span>{selected.text}</span>
-          : 'Elige una respuesta'}
+        {selected ? selected.text : 'Elige una respuesta'}
       </button>
       {open && (
         <div className="absolute z-10 mt-1 w-full border rounded bg-white shadow-lg max-h-64 overflow-y-auto">
@@ -64,7 +62,7 @@ const OptionSelect = ({ options, value, onChange }) => {
               onClick={() => { onChange(opt.id); setOpen(false); }}
               className="block w-full text-left p-3 hover:bg-blue-50 whitespace-normal"
             >
-              <span className="font-bold mr-2">{opt.id})</span>{opt.text}
+              {opt.text}
             </button>
           ))}
         </div>
