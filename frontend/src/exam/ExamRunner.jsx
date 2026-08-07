@@ -336,56 +336,65 @@ const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
           </div>
         )}
 
-        {state.phase === 'audio-pending' && <p className="text-center text-blue-600">Préparation de l'audio...</p>}
-        {state.phase === 'audio-playing' && <p className="text-center text-blue-600">Écoute en cours...</p>}
-
-        {(state.phase === 'audio-pending' || state.phase === 'audio-playing') && (
-          <div className="max-w-md mx-auto space-y-1">
-            <div className="h-2 bg-gray-300 rounded overflow-hidden">
-              <div
-                className="h-full bg-gray-600"
-                style={{ width: `${item.duree_audio_s > 0 ? Math.min(100, (audioCurrentTime / item.duree_audio_s) * 100) : 0}%` }}
-              />
-            </div>
-            <p className="text-center text-xs text-gray-500">
-              {formatSeconds(audioCurrentTime)} / {formatSeconds(item.duree_audio_s)}
-            </p>
-          </div>
-        )}
-
-        <div className="space-y-6">
-          {questions.map((question, questionIndex) => (
-            <div key={`${item.ref}-${questionIndex}`} className="border rounded p-4 space-y-2">
-              <h3 className="font-bold">{question.prompt}</h3>
-              {useSelect ? (
-                <OptionSelect
-                  options={question.options}
-                  value={itemAnswers[questionIndex]}
-                  onChange={optionId => handleAnswer(questionIndex, optionId)}
-                />
-              ) : (
-                question.options.map(opt => {
-                  const selected = itemAnswers[questionIndex] === opt.id;
-                  return (
-                    <label
-                      key={opt.id}
-                      className={`flex items-center gap-3 w-full text-left p-3 rounded cursor-pointer ${selected ? 'bg-gray-200' : 'hover:bg-gray-50'}`}
-                    >
-                      <input
-                        type="radio"
-                        name={`${item.ref}-q${questionIndex}`}
-                        checked={selected}
-                        onChange={() => handleAnswer(questionIndex, opt.id)}
-                        className="h-4 w-4 shrink-0"
-                      />
-                      <span className="text-black">{opt.text}</span>
-                    </label>
-                  );
-                })
-              )}
-            </div>
-          ))}
-        </div>
+        <table className="w-full border-collapse table-fixed">
+          <tbody>
+            <tr>
+              <td className="w-[300px] align-top py-2 pr-6">
+                {state.phase === 'audio-pending' && <p className="text-center text-blue-600 mb-2 text-sm">Préparation de l'audio...</p>}
+                {state.phase === 'audio-playing' && <p className="text-center text-blue-600 mb-2 text-sm">Écoute en cours...</p>}
+                {(state.phase === 'audio-pending' || state.phase === 'audio-playing') && (
+                  <div className="relative h-[22px] bg-gray-400 rounded overflow-hidden">
+                    <div
+                      className="absolute inset-y-0 left-0 bg-gray-500"
+                      style={{ width: `${item.duree_audio_s > 0 ? Math.min(100, (audioCurrentTime / item.duree_audio_s) * 100) : 0}%` }}
+                    />
+                    <div className="absolute inset-y-0 left-0 w-5 bg-gray-700 flex items-center justify-center text-white text-[9px]">
+                      &#9654;
+                    </div>
+                    <span className="absolute inset-y-0 right-2 flex items-center text-[11px] font-mono text-gray-50">
+                      {formatSeconds(audioCurrentTime)} / {formatSeconds(item.duree_audio_s)}
+                    </span>
+                  </div>
+                )}
+              </td>
+              <td className="align-top py-2">
+                <div className="space-y-6">
+                  {questions.map((question, questionIndex) => (
+                    <div key={`${item.ref}-${questionIndex}`}>
+                      <h3 className="font-bold text-black mb-3">{question.prompt}</h3>
+                      {useSelect ? (
+                        <OptionSelect
+                          options={question.options}
+                          value={itemAnswers[questionIndex]}
+                          onChange={optionId => handleAnswer(questionIndex, optionId)}
+                        />
+                      ) : (
+                        question.options.map(opt => {
+                          const selected = itemAnswers[questionIndex] === opt.id;
+                          return (
+                            <label
+                              key={opt.id}
+                              className={`flex items-center gap-3 w-full text-left p-3 rounded cursor-pointer ${selected ? 'bg-gray-200' : 'hover:bg-gray-50'}`}
+                            >
+                              <input
+                                type="radio"
+                                name={`${item.ref}-q${questionIndex}`}
+                                checked={selected}
+                                onChange={() => handleAnswer(questionIndex, opt.id)}
+                                className="h-4 w-4 shrink-0"
+                              />
+                              <span className="text-black">{opt.text}</span>
+                            </label>
+                          );
+                        })
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     );
   }
