@@ -193,7 +193,7 @@ export function createPipeline({ dataDir, generator, synth, imageSynth, catalog 
           // pasa a 'pret' solo cuando las 4 imágenes de opción están.
           if (sectionType === 'conversation_image' && item.etat === 'genere' && item.audio) {
             try {
-              const refPath = join(imagesDir(dataDir, set.id), `${item.ref}-ref.png`);
+              const refPath = join(imagesDir(dataDir, set.id), `${item.ref}-ref.jpg`);
               let refBase64 = await imageSynth.readReferenceIfExists(refPath);
               if (!refBase64) {
                 set.ledger.images.appels += 1;
@@ -204,11 +204,11 @@ export function createPipeline({ dataDir, generator, synth, imageSynth, catalog 
               for (const option of item.questions[0].options) {
                 if (item.images.some(img => img.id === option.id)) continue;
                 set.ledger.images.appels += 1;
-                const relativo = `images/${item.ref}-${option.id}.png`;
+                const relativo = `images/${item.ref}-${option.id}.jpg`;
                 await imageSynth.synthImageToFile({
                   prompt: promptDeOpcion(option.imagePrompt),
                   referenceImageBase64: refBase64,
-                  outPath: join(imagesDir(dataDir, set.id), `${item.ref}-${option.id}.png`),
+                  outPath: join(imagesDir(dataDir, set.id), `${item.ref}-${option.id}.jpg`),
                 });
                 item.images.push({ id: option.id, path: relativo });
                 await writeSet(dataDir, set);

@@ -335,7 +335,7 @@ test('run genera texto, audio y 4 imágenes para conversation_image, y marca pre
     assert.equal(item.etat, 'pret');
     assert.equal(item.images.length, 4);
     assert.deepEqual(item.images.map(i => i.id).sort(), ['A', 'B', 'C', 'D']);
-    assert.ok(item.images.every(i => i.path === `images/${item.ref}-${i.id}.png`));
+    assert.ok(item.images.every(i => i.path === `images/${item.ref}-${i.id}.jpg`));
   }
   // 4 ítems x (1 referencia + 4 opciones) = 20 llamadas de imagen
   assert.equal(imageSynth.contador.llamadas, 20);

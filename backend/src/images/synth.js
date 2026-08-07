@@ -15,7 +15,7 @@ export function createImageSynth({ apiKey, fetchImpl = fetch }) {
 
       const input = [{ type: 'text', text: prompt }];
       if (referenceImageBase64) {
-        input.push({ type: 'image', mime_type: 'image/png', data: referenceImageBase64 });
+        input.push({ type: 'image', mime_type: 'image/jpeg', data: referenceImageBase64 });
       }
 
       const response = await fetchImpl(INTERACTIONS_URL, {
@@ -24,7 +24,7 @@ export function createImageSynth({ apiKey, fetchImpl = fetch }) {
         body: JSON.stringify({
           model: IMAGE_MODEL,
           input,
-          response_format: { type: 'image', mime_type: 'image/png', image_size: '512px' },
+          response_format: { type: 'image', mime_type: 'image/jpeg', image_size: '512px' },
         }),
       });
 

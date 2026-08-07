@@ -377,7 +377,7 @@ app.get('/api/sets/:id/audio/:archivo', (req, res) => {
 });
 
 app.get('/api/sets/:id/images/:archivo', (req, res) => {
-  if (!/^[\w-]+\.png$/.test(req.params.archivo)) {
+  if (!/^[\w-]+\.jpg$/.test(req.params.archivo)) {
     return res.status(400).json({ error: 'Nombre de imagen inválido' });
   }
   res.sendFile(join(imagesDir(DATA_DIR, req.params.id), req.params.archivo), error => {
