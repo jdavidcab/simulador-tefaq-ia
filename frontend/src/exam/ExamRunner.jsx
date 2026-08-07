@@ -110,16 +110,23 @@ const AnsweredCounter = ({ answered, total }) => (
   </div>
 );
 
-const SectionTabs = ({ tabs }) => (
-  <div className="flex overflow-x-auto border-b border-gray-200 mt-3.5" aria-hidden="true">
-    {tabs.map(tab => (
-      <div
-        key={tab.globalNumber}
-        className={`shrink-0 whitespace-nowrap px-5 py-3 text-sm font-semibold ${tab.status === 'current' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'}`}
-      >
-        Écran {tab.globalNumber}
+const SectionTabs = ({ tabs, countdown }) => (
+  <div className="flex items-center border-b border-gray-200 mt-3.5">
+    <div className="flex overflow-x-auto flex-1" aria-hidden="true">
+      {tabs.map(tab => (
+        <div
+          key={tab.globalNumber}
+          className={`shrink-0 whitespace-nowrap px-5 py-3 text-sm font-semibold ${tab.status === 'current' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'}`}
+        >
+          Écran {tab.globalNumber}
+        </div>
+      ))}
+    </div>
+    {countdown != null && (
+      <div className="shrink-0 px-5 text-sm font-mono font-semibold text-red-600">
+        00:{countdown.toString().padStart(2, '0')}
       </div>
-    ))}
+    )}
   </div>
 );
 
@@ -341,12 +348,6 @@ const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
     }
     body = (
       <div className="space-y-4">
-        {state.phase === 'apres' && (
-          <div className="text-center text-4xl font-mono text-red-600">
-            00:{remaining.toString().padStart(2, '0')}
-          </div>
-        )}
-
         <table className="w-full border-collapse table-fixed">
           <tbody>
             <tr>
@@ -412,7 +413,7 @@ const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
     <div>
       <Header />
       <AnsweredCounter answered={answeredCount} total={totalQuestions} />
-      <SectionTabs tabs={sectionTabs.sectionTabs} />
+      <SectionTabs tabs={sectionTabs.sectionTabs} countdown={state.phase === 'apres' ? remaining : null} />
       <p className="mx-10 mt-4 text-xs tracking-wider uppercase text-gray-400 font-semibold">Écran {sectionTabs.globalIndex}</p>
       <div className="mx-10 mt-2 mb-4 border-b border-gray-100" />
       <div className="px-10 pb-2">{body}</div>
