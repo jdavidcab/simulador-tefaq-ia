@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { createPipeline } from '../src/sets/pipeline.js';
 import { readSet } from '../src/sets/store.js';
 
@@ -67,6 +67,70 @@ async function nuevoPipeline(opts = {}) {
   const synth = opts.synth ?? synthFake();
   const pipeline = createPipeline({ dataDir, generator, synth, catalog: catalogoAmplio() });
   return { dataDir, pipeline, generator, synth };
+}
+
+function catalogoConImagenes() {
+  return catalogoAmplio(); // conversation_image no usa este catálogo -- ver imageCategories.js
+}
+
+function generadorFakeConversationImage({ contador = { llamadas: 0 } } = {}) {
+  return {
+    contador,
+    async generateItem({ sectionType, topicId }) {
+      contador.llamadas += 1;
+      if (sectionType !== 'conversation_image') {
+        return generadorFake().generateItem({ sectionType, topicId });
+      }
+      return {
+        transcript: `dialogue court sur ${topicId}`,
+        questions: [{
+          prompt: 'p',
+          options: [
+            { id: 'A', text: 'a', imagePrompt: 'ip-a' },
+            { id: 'B', text: 'b', imagePrompt: 'ip-b' },
+            { id: 'C', text: 'c', imagePrompt: 'ip-c' },
+            { id: 'D', text: 'd', imagePrompt: 'ip-d' },
+          ],
+          correctId: 'A', feedback: 'f', justification: 'j', justificationScore: 1,
+        }],
+        provider: 'fake-provider', tentativas: 1,
+      };
+    },
+  };
+}
+
+function imageSynthFake({ fallarSiempre = false, fallaDeCuota = false, contador = { llamadas: 0 } } = {}) {
+  return {
+    contador,
+    async synthImageToFile({ outPath }) {
+      contador.llamadas += 1;
+      if (fallarSiempre) {
+        const error = new Error(fallaDeCuota ? 'cuota de imagen agotada' : 'imagen no generada');
+        if (fallaDeCuota) error.status = 429;
+        throw error;
+      }
+      await mkdir(dirname(outPath), { recursive: true });
+      await writeFile(outPath, 'fake-image-bytes');
+      return { base64: 'ZmFrZQ==' };
+    },
+    async readReferenceIfExists(path) {
+      try {
+        await readFile(path);
+        return 'ZmFrZQ==';
+      } catch {
+        return null;
+      }
+    },
+  };
+}
+
+async function nuevoPipelineConImagenes(opts = {}) {
+  const dataDir = await mkdtemp(join(tmpdir(), 'pipe-img-'));
+  const generator = opts.generator ?? generadorFakeConversationImage();
+  const synth = opts.synth ?? synthFake();
+  const imageSynth = opts.imageSynth ?? imageSynthFake();
+  const pipeline = createPipeline({ dataDir, generator, synth, imageSynth, catalog: catalogoConImagenes() });
+  return { dataDir, pipeline, generator, synth, imageSynth };
 }
 
 test('createSet escribe el esqueleto con los 32 ítems en espera y no genera nada', async () => {
@@ -225,9 +289,9 @@ test('el plan y las relajaciones quedan persistidos en el set', async () => {
   assert.equal(persistido.seed, 11);
 });
 
-test('createSet rechaza formatos que este slice no genera', async () => {
+test('createSet rechaza formatos que no existen', async () => {
   const { pipeline } = await nuevoPipeline();
-  await assert.rejects(() => pipeline.createSet({ format: 'SET_STANDARD_40', seed: 1 }), /SET_STANDARD_36/);
+  await assert.rejects(() => pipeline.createSet({ format: 'SET_STANDARD_99', seed: 1 }), /Formato no soportado/);
 });
 
 test('un fallo de TTS por cuota/red detiene la corrida completa (parada limpia)', async () => {
@@ -240,4 +304,103 @@ test('un fallo de TTS por cuota/red detiene la corrida completa (parada limpia)'
   const tocados = items.filter(i => i.etat === 'genere' || i.etat === 'pret').length;
   assert.equal(tocados, 1, 'debe detenerse tras el primer fallo de cuota, sin generar texto para los demás pese a maxItems:5');
   assert.equal(parcial.statut, 'partial');
+});
+
+test('createSet con SET_STANDARD_40 escribe 36 ítems, incluida conversation_image', async () => {
+  const { pipeline } = await nuevoPipelineConImagenes();
+  const set = await pipeline.createSet({ seed: 1, format: 'SET_STANDARD_40' });
+  assert.equal(set.format, 'SET_STANDARD_40');
+  assert.equal(set.plan.length, 36);
+  const convImg = set.plan.filter(p => p.sectionType === 'conversation_image');
+  assert.equal(convImg.length, 4);
+});
+
+test('createSet rechaza pilotes:true con SET_STANDARD_40', async () => {
+  const { pipeline } = await nuevoPipelineConImagenes();
+  await assert.rejects(
+    () => pipeline.createSet({ seed: 1, format: 'SET_STANDARD_40', pilotes: true }),
+    /pilot/i,
+  );
+});
+
+test('run genera texto, audio y 4 imágenes para conversation_image, y marca pret', async () => {
+  const { dataDir, pipeline, imageSynth } = await nuevoPipelineConImagenes();
+  const set = await pipeline.createSet({ seed: 1, format: 'SET_STANDARD_40' });
+  await pipeline.run(set.id);
+
+  const final = await readSet(dataDir, set.id);
+  const itemsImagen = final.sections.find(s => s.type === 'conversation_image').items;
+  assert.equal(itemsImagen.length, 4);
+  for (const item of itemsImagen) {
+    assert.equal(item.etat, 'pret');
+    assert.equal(item.images.length, 4);
+    assert.deepEqual(item.images.map(i => i.id).sort(), ['A', 'B', 'C', 'D']);
+    assert.ok(item.images.every(i => i.path === `images/${item.ref}-${i.id}.png`));
+  }
+  // 4 ítems x (1 referencia + 4 opciones) = 20 llamadas de imagen
+  assert.equal(imageSynth.contador.llamadas, 20);
+  assert.equal(final.ledger.images.appels, 20);
+});
+
+test('reanudación tras fallo de una imagen NO regenera texto ni las imágenes ya listas', async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), 'pipe-img-'));
+  const generator = generadorFakeConversationImage();
+  const synth = synthFake();
+
+  let llamadas = 0;
+  const imageSynthQueFallaUnaVez = {
+    contador: { llamadas: 0 },
+    async synthImageToFile({ outPath }) {
+      llamadas += 1;
+      this.contador.llamadas += 1;
+      // Falla justo en la 3ra llamada de imagen del primer ítem (referencia +
+      // A ok, B falla) -- fuerza una reanudación parcial.
+      if (llamadas === 3) {
+        const error = new Error('fallo puntual de imagen');
+        throw error;
+      }
+      await mkdir(dirname(outPath), { recursive: true });
+      await writeFile(outPath, 'fake-image-bytes');
+      return { base64: 'ZmFrZQ==' };
+    },
+    async readReferenceIfExists(path) {
+      try {
+        await readFile(path);
+        return 'ZmFrZQ==';
+      } catch {
+        return null;
+      }
+    },
+  };
+
+  const pipeline = createPipeline({
+    dataDir, generator, synth, imageSynth: imageSynthQueFallaUnaVez, catalog: catalogoConImagenes(),
+  });
+  const set = await pipeline.createSet({ seed: 1, format: 'SET_STANDARD_40' });
+  await pipeline.run(set.id, { maxItems: 1 });
+
+  let intermedio = await readSet(dataDir, set.id);
+  const primerItem = intermedio.sections[0].items[0];
+  assert.equal(primerItem.etat, 'genere', 'no debe pasar a echoue por un fallo de imagen');
+  assert.equal(primerItem.images.length, 1, 'solo A quedó registrada antes del fallo');
+  assert.ok(primerItem.transcript, 'el texto ya generado no se pierde');
+  const llamadasGeneratorAntes = generator.contador.llamadas;
+
+  await pipeline.run(set.id, { maxItems: 1 });
+
+  const final = await readSet(dataDir, set.id);
+  const itemFinal = final.sections[0].items[0];
+  assert.equal(itemFinal.etat, 'pret');
+  assert.equal(itemFinal.images.length, 4);
+  assert.equal(generator.contador.llamadas, llamadasGeneratorAntes, 'no se volvió a llamar al generador de texto');
+});
+
+test('esFalloDeCuotaORed en el paso de imágenes detiene la tanda completa', async () => {
+  const { pipeline, imageSynth: _unused } = await nuevoPipelineConImagenes({
+    imageSynth: imageSynthFake({ fallarSiempre: true, fallaDeCuota: true }),
+  });
+  const set = await pipeline.createSet({ seed: 1, format: 'SET_STANDARD_40' });
+  const resultado = await pipeline.run(set.id);
+  const itemsImagen = resultado.sections.find(s => s.type === 'conversation_image').items;
+  assert.ok(itemsImagen.every(item => item.etat !== 'pret'));
 });
