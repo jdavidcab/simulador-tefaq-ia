@@ -64,9 +64,13 @@ function normalizeFeedback(feedback, correctId) {
 }
 
 // Un 429 o un timeout no mejora reintentando el mismo modelo; un fallo de
-// validación con temperature 1 casi siempre sí.
+// validación con temperature 1 casi siempre sí. 401/403 son igual de
+// deterministas que 429/5xx (clave inválida, modelo con restricción regional
+// que exige opt-in, etc.) -- retener el mismo proveedor nunca los resuelve.
 export function esFalloDeCuotaORed(error) {
-  if (typeof error.status === 'number') return error.status === 429 || error.status >= 500;
+  if (typeof error.status === 'number') {
+    return error.status === 401 || error.status === 403 || error.status === 429 || error.status >= 500;
+  }
   return /timeout|fetch failed|ECONNRESET|ENOTFOUND|network|socket/i.test(error.message);
 }
 

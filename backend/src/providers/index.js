@@ -2,8 +2,11 @@ import { createGeminiProvider } from './gemini.provider.js';
 import { createOpenCodeGoProvider } from './opencodego.provider.js';
 
 // Catálogo de modelos OpenCode Go disponibles para selección
+// deepseek-v4-flash está restringido a la región China y exige opt-in
+// explícito (HTTP 403 permanente en esta cuenta) -- deepseek-v4-pro no tiene
+// esa restricción y responde con JSON limpio bajo response_format json_object.
 export const MODELS = {
-  deepseek: 'deepseek-v4-flash',
+  deepseek: 'deepseek-v4-pro',
   mimo: 'mimo-v2.5',
   mimoPro: 'mimo-v2.5-pro',
 };

@@ -11,7 +11,7 @@ const SECTION_LABELS = {
   divers: 'Diversos',
 };
 
-const ExamSummary = ({ correctTotal, totalQuestions, correctBySection, totalsBySection, onExit }) => {
+const ExamSummary = ({ correctTotal, totalQuestions, correctBySection, totalsBySection, onExit, onShowReview }) => {
   const { estimated699, isB2, thresholdCount } = estimateScore699(correctTotal, totalQuestions);
 
   return (
@@ -47,6 +47,10 @@ const ExamSummary = ({ correctTotal, totalQuestions, correctBySection, totalsByS
           )
         ))}
       </div>
+
+      <button onClick={onShowReview} className="w-full border border-blue-600 text-blue-700 py-2 rounded hover:bg-blue-50">
+        Ver revisión detallada
+      </button>
       <button onClick={onExit} className="w-full bg-blue-600 text-white py-2 rounded">
         Volver a la lista de sets
       </button>
