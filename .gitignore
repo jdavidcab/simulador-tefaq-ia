@@ -14,3 +14,6 @@ backend/data/
 
 # macOS
 .DS_Store
+
+# Superpowers scratch (SDD ledgers, brainstorming mockups)
+.superpowers/
