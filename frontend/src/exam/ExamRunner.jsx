@@ -248,16 +248,16 @@ const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
   if (state.status !== 'running') return null;
 
   if (state.phase === 'section-intro') {
-    const introSection = set.sections[state.sectionIndex];
-    const introQuestionCount = introSection.items.reduce((n, i) => n + i.questions.length, 0);
+    const introQuestionCount = section.items.reduce((n, i) => n + i.questions.length, 0);
+    const introHasMultipleQuestions = section.items[0]?.questions.length > 1;
     return (
       <div className="space-y-4 text-center py-10">
         <ProgressTabs tabs={progressTabs} />
-        <h3 className="text-xl font-bold">{SECTION_LABELS[introSection.type]}</h3>
+        <h3 className="text-xl font-bold">{SECTION_LABELS[section.type]}</h3>
         <p className="text-gray-600">{introQuestionCount} preguntas</p>
-        <p className="text-blue-800 font-semibold max-w-lg mx-auto px-4">{SECTION_INSTRUCTIONS[introSection.type]}</p>
+        <p className="text-blue-800 font-semibold max-w-lg mx-auto px-4">{SECTION_INSTRUCTIONS[section.type]}</p>
         <p className="text-red-600 font-semibold max-w-lg mx-auto px-4">
-          Vous avez {introSection.timing.avant} secondes avant et {introSection.timing.apres} secondes après chaque document sonore pour lire et répondre à la question.
+          Vous avez {section.timing.avant} secondes avant et {section.timing.apres} secondes après chaque document sonore pour lire et répondre {introHasMultipleQuestions ? 'aux questions' : 'à la question'}.
         </p>
         <div className="text-center text-4xl font-mono text-red-600">
           00:{remaining.toString().padStart(2, '0')}
@@ -301,7 +301,7 @@ const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
       {state.phase === 'audio-pending' && <p className="text-center text-blue-600">Preparando audio...</p>}
       {state.phase === 'audio-playing' && <p className="text-center text-blue-600">Escuchando...</p>}
 
-      {(state.phase === 'audio-pending' || state.phase === 'audio-playing') && item && (
+      {(state.phase === 'audio-pending' || state.phase === 'audio-playing') && (
         <div className="max-w-md mx-auto space-y-1">
           <div className="h-2 bg-gray-300 rounded overflow-hidden">
             <div
