@@ -53,7 +53,7 @@ const OptionSelect = ({ options, value, onChange }) => {
         onClick={() => setOpen(prev => !prev)}
         className="w-full text-left border rounded px-3 py-2 bg-white"
       >
-        {selected ? selected.text : 'Elige una respuesta'}
+        {selected ? selected.text : 'Choisissez une réponse'}
       </button>
       {open && (
         <div className="absolute z-10 mt-1 w-full border rounded bg-white shadow-lg max-h-64 overflow-y-auto">
@@ -111,11 +111,11 @@ const AnsweredCounter = ({ answered, total }) => (
 );
 
 const SectionTabs = ({ tabs }) => (
-  <div className="flex border-b border-gray-200 mt-3.5" aria-hidden="true">
+  <div className="flex overflow-x-auto border-b border-gray-200 mt-3.5" aria-hidden="true">
     {tabs.map(tab => (
       <div
         key={tab.globalNumber}
-        className={`px-5 py-3 text-sm font-semibold ${tab.status === 'current' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'}`}
+        className={`shrink-0 whitespace-nowrap px-5 py-3 text-sm font-semibold ${tab.status === 'current' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'}`}
       >
         Écran {tab.globalNumber}
       </div>
@@ -288,7 +288,7 @@ const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
   };
 
   const handleAbandon = () => {
-    if (!window.confirm('¿Seguro que quieres abandonar el examen? Se perderá todo el progreso.')) return;
+    if (!window.confirm("Voulez-vous vraiment abandonner l'examen ? Toute votre progression sera perdue.")) return;
     dispatch({ type: 'ABANDON' });
   };
 
