@@ -3,6 +3,7 @@ import {
   sectionDemand, CONFIG as DEFAULT_CONFIG,
 } from '../examFormat.js';
 import { topicsForSection } from './catalog.js';
+import { pickCategories } from './imageCategories.js';
 import { createRng, sampleWithoutReplacement, shuffleWithRng } from '../rng.js';
 
 // Temas usados por cada sección en los `window` planes más recientes.
@@ -58,6 +59,13 @@ export function planTopics({
   });
 
   for (const sectionType of ordenPorEscasez) {
+    if (sectionType === 'conversation_image') {
+      const elegidas = pickCategories(rng, recentPlans, demanda[sectionType]);
+      for (const categoria of elegidas) asignados.add(categoria.id);
+      porSeccion[sectionType] = elegidas;
+      continue;
+    }
+
     let window = config.historyWindow;
     let pool = disponibles(catalog, sectionType, recentPlans, window, asignados);
 
