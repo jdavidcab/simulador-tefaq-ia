@@ -328,9 +328,20 @@ const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
     const questions = item.questions;
     const itemAnswers = state.answers[section.type]?.[item.ref] ?? {};
     const useSelect = SELECT_SECTIONS.has(section.type);
+    const totalBarSeconds = section.timing.avant + item.duree_audio_s;
+    let elapsedBarSeconds = 0;
+    if (state.phase === 'avant') {
+      elapsedBarSeconds = Math.min(section.timing.avant, Math.max(0, section.timing.avant - remaining));
+    } else if (state.phase === 'audio-pending') {
+      elapsedBarSeconds = section.timing.avant;
+    } else if (state.phase === 'audio-playing') {
+      elapsedBarSeconds = section.timing.avant + audioCurrentTime;
+    } else if (state.phase === 'apres') {
+      elapsedBarSeconds = totalBarSeconds;
+    }
     body = (
       <div className="space-y-4">
-        {(state.phase === 'avant' || state.phase === 'apres') && (
+        {state.phase === 'apres' && (
           <div className="text-center text-4xl font-mono text-red-600">
             00:{remaining.toString().padStart(2, '0')}
           </div>
@@ -342,20 +353,18 @@ const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
               <td className="w-[300px] align-top py-2 pr-6">
                 {state.phase === 'audio-pending' && <p className="text-center text-blue-600 mb-2 text-sm">Préparation de l'audio...</p>}
                 {state.phase === 'audio-playing' && <p className="text-center text-blue-600 mb-2 text-sm">Écoute en cours...</p>}
-                {(state.phase === 'audio-pending' || state.phase === 'audio-playing') && (
-                  <div className="relative h-[22px] bg-gray-400 rounded overflow-hidden">
-                    <div
-                      className="absolute inset-y-0 left-0 bg-gray-500"
-                      style={{ width: `${item.duree_audio_s > 0 ? Math.min(100, (audioCurrentTime / item.duree_audio_s) * 100) : 0}%` }}
-                    />
-                    <div className="absolute inset-y-0 left-0 w-5 bg-gray-700 flex items-center justify-center text-white text-[9px]">
-                      &#9654;
-                    </div>
-                    <span className="absolute inset-y-0 right-2 flex items-center text-[11px] font-mono text-gray-50">
-                      {formatSeconds(audioCurrentTime)} / {formatSeconds(item.duree_audio_s)}
-                    </span>
+                <div className="relative h-[22px] bg-gray-400 rounded overflow-hidden">
+                  <div
+                    className="absolute inset-y-0 left-0 bg-gray-500"
+                    style={{ width: `${totalBarSeconds > 0 ? Math.min(100, (elapsedBarSeconds / totalBarSeconds) * 100) : 0}%` }}
+                  />
+                  <div className="absolute inset-y-0 left-0 w-5 bg-gray-700 flex items-center justify-center text-white text-[9px]">
+                    &#9654;
                   </div>
-                )}
+                  <span className="absolute inset-y-0 right-2 flex items-center text-[11px] font-mono text-gray-50">
+                    {formatSeconds(elapsedBarSeconds)} / {formatSeconds(totalBarSeconds)}
+                  </span>
+                </div>
               </td>
               <td className="align-top py-2">
                 <div className="space-y-6">
