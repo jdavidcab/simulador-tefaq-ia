@@ -1,20 +1,22 @@
 import React, { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import { createInitialState, reducer, currentToken, computeResults } from './examMachine';
+import { createInitialState, reducer, currentToken, computeResults, countAnswered } from './examMachine';
 import { startPhase, remainingSeconds, isExpired, chainDeadline } from './examTiming';
-import { buildProgressTabs } from './examProgress';
+import { buildProgressTabs, buildSectionTabs } from './examProgress';
+import lfaLogo from '../assets/le-francais-des-affaires-logo.png';
+import cciLogo from '../assets/cci-paris-logo.jpg';
 
 const TICK_MS = 250;
 const WATCHDOG_GRACE_MS = 1000;
 const SECTION_INTRO_SECONDS = 15;
 
 const SECTION_LABELS = {
-  annonce_publique: 'Anuncios públicos',
-  repondeur: 'Contestador',
+  annonce_publique: 'Annonces publiques',
+  repondeur: 'Répondeur',
   micro_trottoir: 'Micro-trottoir',
-  chronique: 'Crónica',
-  interview: 'Entrevista',
-  reportage: 'Reportaje',
-  divers: 'Diversos',
+  chronique: 'Chronique',
+  interview: 'Interview',
+  reportage: 'Reportage',
+  divers: 'Divers',
 };
 
 const SECTION_INSTRUCTIONS = {
@@ -76,15 +78,61 @@ const ProgressTabs = ({ tabs }) => (
     {tabs.map((tab, i) => (
       <div
         key={i}
-        className={`flex-1 h-5 rounded-sm flex items-center justify-center text-[9px] leading-none font-semibold ${
-          tab.status === 'completed' ? 'bg-blue-600 text-white'
-            : tab.status === 'current' ? 'bg-blue-400 text-white'
-              : 'bg-gray-200 text-gray-500'
+        className={`h-2 flex-1 rounded-sm ${
+          tab.status === 'completed' ? 'bg-blue-600'
+            : tab.status === 'current' ? 'bg-blue-400'
+              : 'bg-gray-200'
         }`}
+      />
+    ))}
+  </div>
+);
+
+const Header = () => (
+  <div className="flex items-center justify-between px-8 py-5 border-b-[3px] border-red-600">
+    <div className="flex items-center gap-3">
+      <img src={lfaLogo} alt="Le Français des Affaires" className="h-10" />
+      <img src={cciLogo} alt="CCI Paris Île-de-France Education" className="h-10" />
+    </div>
+    <div className="text-right leading-tight">
+      <div className="font-bold text-blue-900 text-sm">Candidat(e)</div>
+      <div className="text-blue-900 text-xs">Simulateur TEFAQ</div>
+    </div>
+  </div>
+);
+
+const AnsweredCounter = ({ answered, total }) => (
+  <div className="flex justify-end items-center gap-2.5 px-8 pt-2">
+    <span className="text-sm text-gray-700">{answered}/{total}</span>
+    <div className="w-40 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+      <div className="h-full bg-gray-400" style={{ width: `${total > 0 ? (answered / total) * 100 : 0}%` }} />
+    </div>
+  </div>
+);
+
+const SectionTabs = ({ tabs }) => (
+  <div className="flex border-b border-gray-200 mt-3.5" aria-hidden="true">
+    {tabs.map(tab => (
+      <div
+        key={tab.globalNumber}
+        className={`px-5 py-3 text-sm font-semibold ${tab.status === 'current' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'}`}
       >
-        {i + 1}
+        Écran {tab.globalNumber}
       </div>
     ))}
+  </div>
+);
+
+const Footer = ({ tabs, onAbandon }) => (
+  <div className="px-8 py-4 border-t border-gray-100">
+    <div className="mb-4">
+      <ProgressTabs tabs={tabs} />
+    </div>
+    <div className="flex justify-end">
+      <button onClick={onAbandon} className="border border-red-600 text-red-600 px-5 py-2 rounded-full text-sm font-semibold hover:bg-red-50">
+        Abandonner
+      </button>
+    </div>
   </div>
 );
 
@@ -103,6 +151,9 @@ const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
   const section = set.sections[state.sectionIndex];
   const item = section?.items?.[state.itemIndex];
   const progressTabs = buildProgressTabs(set, state);
+  const sectionTabs = buildSectionTabs(set, state);
+  const answeredCount = countAnswered(state.answers);
+  const totalQuestions = set.sections.reduce((sum, s) => sum + s.items.reduce((n, i) => n + i.questions.length, 0), 0);
 
   const clearWatchdog = useCallback(() => {
     if (watchdogRef.current) {
@@ -247,14 +298,14 @@ const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
 
   if (state.status !== 'running') return null;
 
+  let body;
   if (state.phase === 'section-intro') {
     const introQuestionCount = section.items.reduce((n, i) => n + i.questions.length, 0);
     const introHasMultipleQuestions = section.items[0]?.questions.length > 1;
-    return (
+    body = (
       <div className="space-y-4 text-center py-10">
-        <ProgressTabs tabs={progressTabs} />
         <h3 className="text-xl font-bold">{SECTION_LABELS[section.type]}</h3>
-        <p className="text-gray-600">{introQuestionCount} preguntas</p>
+        <p className="text-gray-600">{introQuestionCount} questions</p>
         <p className="text-blue-800 font-semibold max-w-lg mx-auto px-4">{SECTION_INSTRUCTIONS[section.type]}</p>
         <p className="text-red-600 font-semibold max-w-lg mx-auto px-4">
           Vous avez {section.timing.avant} secondes avant et {section.timing.apres} secondes après chaque document sonore pour lire et répondre {introHasMultipleQuestions ? 'aux questions' : 'à la question'}.
@@ -262,92 +313,92 @@ const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
         <div className="text-center text-4xl font-mono text-red-600">
           00:{remaining.toString().padStart(2, '0')}
         </div>
-        <button onClick={handleAbandon} className="block mx-auto text-sm text-gray-500 hover:underline">Abandonar</button>
       </div>
     );
-  }
-
-  if (state.phase === 'audio-failed') {
-    return (
+  } else if (state.phase === 'audio-failed') {
+    body = (
       <div className="space-y-4 text-center py-10">
-        <ProgressTabs tabs={progressTabs} />
-        <p className="text-red-600">No se pudo reproducir el audio.</p>
-        <button onClick={handleRetryAudio} className="bg-blue-600 text-white px-6 py-2 rounded">Reintentar</button>
-        <button onClick={handleAbandon} className="block mx-auto text-sm text-gray-500 hover:underline">Abandonar</button>
+        <p className="text-red-600">Impossible de lire l'audio.</p>
+        <button onClick={handleRetryAudio} className="bg-blue-600 text-white px-6 py-2 rounded">Réessayer</button>
+      </div>
+    );
+  } else if (!item) {
+    return null;
+  } else {
+    const questions = item.questions;
+    const itemAnswers = state.answers[section.type]?.[item.ref] ?? {};
+    const useSelect = SELECT_SECTIONS.has(section.type);
+    body = (
+      <div className="space-y-4">
+        {(state.phase === 'avant' || state.phase === 'apres') && (
+          <div className="text-center text-4xl font-mono text-red-600">
+            00:{remaining.toString().padStart(2, '0')}
+          </div>
+        )}
+
+        {state.phase === 'audio-pending' && <p className="text-center text-blue-600">Préparation de l'audio...</p>}
+        {state.phase === 'audio-playing' && <p className="text-center text-blue-600">Écoute en cours...</p>}
+
+        {(state.phase === 'audio-pending' || state.phase === 'audio-playing') && (
+          <div className="max-w-md mx-auto space-y-1">
+            <div className="h-2 bg-gray-300 rounded overflow-hidden">
+              <div
+                className="h-full bg-gray-600"
+                style={{ width: `${item.duree_audio_s > 0 ? Math.min(100, (audioCurrentTime / item.duree_audio_s) * 100) : 0}%` }}
+              />
+            </div>
+            <p className="text-center text-xs text-gray-500">
+              {formatSeconds(audioCurrentTime)} / {formatSeconds(item.duree_audio_s)}
+            </p>
+          </div>
+        )}
+
+        <div className="space-y-6">
+          {questions.map((question, questionIndex) => (
+            <div key={`${item.ref}-${questionIndex}`} className="border rounded p-4 space-y-2">
+              <h3 className="font-bold">{question.prompt}</h3>
+              {useSelect ? (
+                <OptionSelect
+                  options={question.options}
+                  value={itemAnswers[questionIndex]}
+                  onChange={optionId => handleAnswer(questionIndex, optionId)}
+                />
+              ) : (
+                question.options.map(opt => {
+                  const selected = itemAnswers[questionIndex] === opt.id;
+                  return (
+                    <label
+                      key={opt.id}
+                      className={`flex items-center gap-3 w-full text-left p-3 rounded cursor-pointer ${selected ? 'bg-gray-200' : 'hover:bg-gray-50'}`}
+                    >
+                      <input
+                        type="radio"
+                        name={`${item.ref}-q${questionIndex}`}
+                        checked={selected}
+                        onChange={() => handleAnswer(questionIndex, opt.id)}
+                        className="h-4 w-4 shrink-0"
+                      />
+                      <span className="text-black">{opt.text}</span>
+                    </label>
+                  );
+                })
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
-
-  if (!item) return null;
-
-  const questions = item.questions;
-  const itemAnswers = state.answers[section.type]?.[item.ref] ?? {};
-  const useSelect = SELECT_SECTIONS.has(section.type);
 
   return (
-    <div className="space-y-4">
-      <ProgressTabs tabs={progressTabs} />
-      <div className="flex items-center justify-between text-sm text-gray-500">
-        <span>{SECTION_LABELS[section.type]} · ítem {state.itemIndex + 1}/{section.items.length}</span>
-        <button onClick={handleAbandon} className="text-red-600 hover:underline">Abandonar</button>
-      </div>
-
-      {(state.phase === 'avant' || state.phase === 'apres') && (
-        <div className="text-center text-4xl font-mono text-red-600">
-          00:{remaining.toString().padStart(2, '0')}
-        </div>
-      )}
-
-      {state.phase === 'audio-pending' && <p className="text-center text-blue-600">Preparando audio...</p>}
-      {state.phase === 'audio-playing' && <p className="text-center text-blue-600">Escuchando...</p>}
-
-      {(state.phase === 'audio-pending' || state.phase === 'audio-playing') && (
-        <div className="max-w-md mx-auto space-y-1">
-          <div className="h-2 bg-gray-300 rounded overflow-hidden">
-            <div
-              className="h-full bg-gray-600"
-              style={{ width: `${item.duree_audio_s > 0 ? Math.min(100, (audioCurrentTime / item.duree_audio_s) * 100) : 0}%` }}
-            />
-          </div>
-          <p className="text-center text-xs text-gray-500">
-            {formatSeconds(audioCurrentTime)} / {formatSeconds(item.duree_audio_s)}
-          </p>
-        </div>
-      )}
-
-      <div className="space-y-6">
-        {questions.map((question, questionIndex) => (
-          <div key={`${item.ref}-${questionIndex}`} className="border rounded p-4 space-y-2">
-            <h3 className="font-bold">{question.prompt}</h3>
-            {useSelect ? (
-              <OptionSelect
-                options={question.options}
-                value={itemAnswers[questionIndex]}
-                onChange={optionId => handleAnswer(questionIndex, optionId)}
-              />
-            ) : (
-              question.options.map(opt => {
-                const selected = itemAnswers[questionIndex] === opt.id;
-                return (
-                  <label
-                    key={opt.id}
-                    className={`flex items-center gap-3 w-full text-left p-3 rounded cursor-pointer ${selected ? 'bg-gray-200' : 'hover:bg-gray-50'}`}
-                  >
-                    <input
-                      type="radio"
-                      name={`${item.ref}-q${questionIndex}`}
-                      checked={selected}
-                      onChange={() => handleAnswer(questionIndex, opt.id)}
-                      className="h-4 w-4 shrink-0"
-                    />
-                    <span>{opt.text}</span>
-                  </label>
-                );
-              })
-            )}
-          </div>
-        ))}
-      </div>
+    <div>
+      <Header />
+      <AnsweredCounter answered={answeredCount} total={totalQuestions} />
+      <SectionTabs tabs={sectionTabs.sectionTabs} />
+      <p className="mx-10 mt-4 text-xs tracking-wider uppercase text-gray-400 font-semibold">Écran {sectionTabs.globalIndex}</p>
+      <div className="mx-10 mt-2 mb-4 border-b border-gray-100" />
+      <div className="px-10 pb-2">{body}</div>
+      <Footer tabs={progressTabs} onAbandon={handleAbandon} />
     </div>
   );
 };
