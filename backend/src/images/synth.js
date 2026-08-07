@@ -24,7 +24,7 @@ export function createImageSynth({ apiKey, fetchImpl = fetch }) {
         body: JSON.stringify({
           model: IMAGE_MODEL,
           input,
-          response_format: { type: 'image', mime_type: 'image/jpeg', image_size: '512px' },
+          response_format: { type: 'image', mime_type: 'image/jpeg', image_size: '512' },
         }),
       });
 
