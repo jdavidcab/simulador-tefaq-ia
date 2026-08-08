@@ -42,7 +42,7 @@ export const CONFIG = {
   microTrottoirOptions: 3,        // 3 o 4
   validationRetries: 2,           // reintentos en el MISMO proveedor
   piloteCount: 4,
-  reformulationOverlapThreshold: 0.6,  // por encima de esto, la opción correcta calca el audio
+  reformulationOverlapThreshold: 0.75,  // por encima de esto, la opción correcta calca el audio
   reformulationMinTrapWords: 2,        // mínimo de palabras literales compartidas para contar como trampa
 };
 

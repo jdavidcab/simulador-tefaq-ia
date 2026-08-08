@@ -35,8 +35,8 @@ test('rechaza si la opción correcta calca literalmente el audio', () => {
     options: [
       { id: 'A', text: 'on va fermer la piscine cet été' },
       { id: 'B', text: 'Une fermeture temporaire du service' },
-      { id: 'C', text: 'Une otra option plausible' },
-      { id: 'D', text: 'Encore una otra option' },
+      { id: 'C', text: 'Une autre option plausible' },
+      { id: 'D', text: 'Encore une autre option' },
     ],
   });
   assert.throws(() => checkReformulation(pregunta, TRANSCRIPT, CONFIG), /solapa/);
