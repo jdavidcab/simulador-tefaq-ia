@@ -19,7 +19,7 @@
 // camino.
 //
 // Uso: node backend/scripts/reorder-conversation-image-first.js
-import { readFile, cp, rename, stat } from 'node:fs/promises';
+import { readFile, cp, rename, stat, readdir, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { writeSet } from '../src/sets/store.js';
@@ -30,6 +30,13 @@ const SET_DIR = join(DATA_DIR, 'sets', SET_ID);
 const SET_JSON = join(SET_DIR, 'set.json');
 const AUDIO_DIR = join(SET_DIR, 'audio');
 const IMAGES_DIR = join(SET_DIR, 'images');
+// Los backups viven FUERA de data/sets/: listSets() escanea todo directorio
+// bajo data/sets/ y reporta el `id` que encuentre dentro del JSON (no el
+// nombre del directorio), así que un backup sibling ahí adentro aparecería
+// como una entrada duplicada/confusa del mismo set en el SetPicker -- aunque
+// nunca sea alcanzable vía la API (el param :id se valida contra el formato
+// estricto de nuevoSetId(), que este nombre de directorio no cumple).
+const BACKUPS_DIR = join(DATA_DIR, 'backups');
 const TMP_SUFFIX = '.reordertmp';
 const IMAGE_SUFFIXES = ['ref', 'A', 'B', 'C', 'D'];
 
@@ -127,6 +134,96 @@ function construirMapeoRefs(set) {
   }
 
   return mapeo;
+}
+
+// Guarda contra un ref de set.plan que no aparezca en el mapeo calculado:
+// `set.plan.map(entry => ({ ...entry, ref: mapeo[entry.ref] }))` produciría
+// silenciosamente `ref: undefined` para esa entrada, sin throw y sin
+// visibilidad en el resumen final. Se corre ANTES del backup y de cualquier
+// operación de archivos.
+function verificarPlanContraMapeo(set, mapeo) {
+  const plan = set.plan ?? [];
+  const sinMapeo = plan.filter(entry => !(entry.ref in mapeo));
+  if (sinMapeo.length > 0) {
+    throw new Error(
+      `set.plan tiene ${sinMapeo.length} entrada(s) cuyo ref no existe en el mapeo calculado: ` +
+      sinMapeo.map(entry => entry.ref).join(', ') +
+      `. Abortando sin tocar nada (ni backup).`
+    );
+  }
+}
+
+// Recorrida recursiva buscando archivos que ya tengan el sufijo temporal --
+// indicaría que una corrida anterior murió a mitad del renombrado (fase A
+// aplicada, fase B no) y que este NO es un re-run seguro.
+async function buscarReordertmp(dir) {
+  const encontrados = [];
+  const entries = await readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      encontrados.push(...(await buscarReordertmp(full)));
+    } else if (entry.name.endsWith(TMP_SUFFIX)) {
+      encontrados.push(full);
+    }
+  }
+  return encontrados;
+}
+
+// Chequeo de pre-vuelo: el script hasta acá confía en que set.json describe
+// fielmente el filesystem. Esto verifica el filesystem en sí, ANTES del
+// backup: audio/ debe tener EXACTAMENTE los 36 archivos de los refs viejos
+// (ni más ni menos), images/ debe tener EXACTAMENTE los 20 archivos de los
+// refs viejos de los 4 ítems conversation_image, y no debe existir ningún
+// archivo `.reordertmp` en todo el directorio del set.
+async function verificarEstadoLimpioDelDisco(set) {
+  const audioEsperados = new Set();
+  const imagesEsperados = new Set();
+  for (const section of set.sections) {
+    for (const item of section.items) {
+      audioEsperados.add(`${item.ref}.wav`);
+      if (section.type === 'conversation_image') {
+        for (const sufijo of IMAGE_SUFFIXES) {
+          imagesEsperados.add(`${item.ref}-${sufijo}.jpg`);
+        }
+      }
+    }
+  }
+
+  const audioReales = new Set(await readdir(AUDIO_DIR));
+  const audioFaltantes = [...audioEsperados].filter(f => !audioReales.has(f));
+  const audioSobrantes = [...audioReales].filter(f => !audioEsperados.has(f));
+  if (audioFaltantes.length > 0 || audioSobrantes.length > 0) {
+    throw new Error(
+      `Estado de audio/ no coincide con lo esperado (${audioEsperados.size} archivos esperados a partir de los refs viejos). ` +
+      (audioFaltantes.length > 0 ? `Faltantes: ${audioFaltantes.join(', ')}. ` : '') +
+      (audioSobrantes.length > 0 ? `Sobrantes/inesperados: ${audioSobrantes.join(', ')}. ` : '') +
+      `El directorio del set no está en el estado limpio esperado -- abortando sin tocar nada.`
+    );
+  }
+
+  const imagesReales = new Set(await readdir(IMAGES_DIR));
+  const imagesFaltantes = [...imagesEsperados].filter(f => !imagesReales.has(f));
+  const imagesSobrantes = [...imagesReales].filter(f => !imagesEsperados.has(f));
+  if (imagesFaltantes.length > 0 || imagesSobrantes.length > 0) {
+    throw new Error(
+      `Estado de images/ no coincide con lo esperado (${imagesEsperados.size} archivos esperados a partir de los refs viejos de conversation_image). ` +
+      (imagesFaltantes.length > 0 ? `Faltantes: ${imagesFaltantes.join(', ')}. ` : '') +
+      (imagesSobrantes.length > 0 ? `Sobrantes/inesperados: ${imagesSobrantes.join(', ')}. ` : '') +
+      `El directorio del set no está en el estado limpio esperado -- abortando sin tocar nada.`
+    );
+  }
+
+  const reordertmpEncontrados = await buscarReordertmp(SET_DIR);
+  if (reordertmpEncontrados.length > 0) {
+    throw new Error(
+      `Se encontraron ${reordertmpEncontrados.length} archivo(s) con sufijo "${TMP_SUFFIX}" ya presentes en el directorio del set:\n` +
+      reordertmpEncontrados.map(f => `  - ${f}`).join('\n') +
+      `\nEsto sugiere que una corrida anterior murió a mitad del renombrado y este NO es un re-run seguro tal cual. ` +
+      `Revisar si existe un directorio de backup de un intento anterior (buscar "${SET_ID}.backup-reorder-" dentro de ${BACKUPS_DIR}) ` +
+      `y restaurar manualmente desde ahí antes de reintentar, en vez de correr el script de nuevo sobre este estado.`
+    );
+  }
 }
 
 async function renombrar(desde, hasta, historial) {
@@ -289,16 +386,22 @@ async function main() {
 
   verificarOrdenActual(set);
   const mapeo = construirMapeoRefs(set);
+  verificarPlanContraMapeo(set, mapeo);
 
   console.log('Mapeo de refs (viejo -> nuevo):');
   for (const [oldRef, newRef] of Object.entries(mapeo)) {
     console.log(`  ${oldRef} -> ${newRef}`);
   }
 
+  await verificarEstadoLimpioDelDisco(set);
+  console.log('Chequeo de pre-vuelo OK: audio/ e images/ contienen exactamente los archivos esperados de los refs viejos, sin restos de una corrida anterior.');
+
   // Backup del directorio COMPLETO (no solo set.json) antes de tocar nada --
-  // este reorder también renombra archivos reales de audio/imagen.
+  // este reorder también renombra archivos reales de audio/imagen. Vive
+  // fuera de data/sets/ (ver comentario de BACKUPS_DIR arriba).
   const timestamp = Date.now();
-  BACKUP_DIR_ACTUAL = `${SET_DIR}.backup-reorder-${timestamp}`;
+  await mkdir(BACKUPS_DIR, { recursive: true });
+  BACKUP_DIR_ACTUAL = join(BACKUPS_DIR, `${SET_ID}.backup-reorder-${timestamp}`);
   await cp(SET_DIR, BACKUP_DIR_ACTUAL, { recursive: true });
   console.log(`Backup completo del directorio del set creado en: ${BACKUP_DIR_ACTUAL}`);
 
@@ -313,14 +416,37 @@ async function main() {
   console.log('set.json actualizado y escrito atómicamente.');
 
   // Lectura de vuelta desde disco (no el objeto en memoria) para confirmar.
-  const verificacion = JSON.parse(await readFile(SET_JSON, 'utf8'));
+  // A esta altura la escritura YA tuvo éxito -- si algo falla de acá en
+  // adelante es solo la confirmación la que falló, no la escritura en sí, así
+  // que el mensaje de error lo distingue explícitamente en vez de sonar como
+  // que nada pasó.
+  let verificacion;
+  try {
+    verificacion = JSON.parse(await readFile(SET_JSON, 'utf8'));
+  } catch (error) {
+    throw new Error(
+      `set.json SE ESCRIBIÓ correctamente, pero la lectura de verificación final falló: ${error.message}. ` +
+      `Revisar manualmente ${SET_JSON}. Backup disponible en: ${BACKUP_DIR_ACTUAL}`
+    );
+  }
   console.log('\nOrden final de secciones (leído de vuelta desde disco):');
   verificacion.sections.forEach((s, i) => console.log(`  ${i}: ${s.type} (${s.items.length} ítems)`));
-  console.log(`\nsections[0].type === 'conversation_image': ${verificacion.sections[0]?.type === 'conversation_image'}`);
+  const ordenCorrecto = verificacion.sections[0]?.type === 'conversation_image';
+  console.log(`\nsections[0].type === 'conversation_image': ${ordenCorrecto}`);
+  if (!ordenCorrecto) {
+    throw new Error(
+      `set.json se escribió, pero la verificación final falló: sections[0].type quedó en ` +
+      `"${verificacion.sections[0]?.type}" en vez de "conversation_image". El archivo en disco no tiene el orden ` +
+      `esperado -- revisar manualmente ${SET_JSON}. Backup disponible en: ${BACKUP_DIR_ACTUAL}`
+    );
+  }
   console.log(`\nBackup completo disponible en: ${BACKUP_DIR_ACTUAL}`);
 }
 
 main().catch(error => {
   console.error('Reorder falló:', error.message);
+  if (BACKUP_DIR_ACTUAL) {
+    console.error(`Backup disponible en: ${BACKUP_DIR_ACTUAL}`);
+  }
   process.exit(1);
 });
