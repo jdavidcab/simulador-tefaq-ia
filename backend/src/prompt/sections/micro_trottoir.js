@@ -17,5 +17,5 @@ ${bloquePatron(ctx.pattern)}
 
 ${reglasComunes({ ...ctx, opcionesFijas: true })}
 
-${esquemaJson(ctx.questionsPerAudio, posturas.length)}`;
+${esquemaJson(ctx.questionsPerAudio, posturas.length, { includeReformulationType: false })}`;
 }

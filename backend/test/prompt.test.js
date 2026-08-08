@@ -118,3 +118,22 @@ test('las otras 6 secciones siguen mencionando "las 4 opciones" (sin regresión)
     assert.ok(/las 4 opciones/i.test(prompt), `${sectionType} debería seguir mencionando "las 4 opciones"`);
   }
 });
+
+test('las 6 secciones de opciones generadas piden reformulationType; micro_trottoir no', () => {
+  for (const sectionType of ['annonce_publique', 'repondeur', 'chronique', 'interview', 'reportage', 'divers']) {
+    const prompt = buildSectionPrompt(sectionType, BASE);
+    assert.ok(prompt.includes('reformulationType'), `${sectionType} debería pedir reformulationType`);
+  }
+  const promptMicroTrottoir = buildSectionPrompt('micro_trottoir', {
+    ...BASE, posture: MICRO_TROTTOIR_POSTURES[CONFIG.microTrottoirOptions][0],
+  });
+  assert.ok(!promptMicroTrottoir.includes('reformulationType'), 'micro_trottoir no debería pedir reformulationType');
+});
+
+test('las 6 secciones de opciones generadas exigen nominalización y la trampa literal', () => {
+  for (const sectionType of ['annonce_publique', 'repondeur', 'chronique', 'interview', 'reportage', 'divers']) {
+    const prompt = buildSectionPrompt(sectionType, BASE);
+    assert.match(prompt, /nominalisation/i, `${sectionType} debería mencionar nominalización`);
+    assert.match(prompt, /trampa de reconocimiento superficial/i, `${sectionType} debería exigir la trampa literal`);
+  }
+});

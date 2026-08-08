@@ -35,9 +35,11 @@ export function reglasComunes({ minWords, maxWords, questionsPerAudio, verticalS
     reglas.push(
       'Los distractores deben seguir este esquema: uno parcialmente verdadero con detalle incorrecto, uno plausible pero no mencionado, uno que confunda causa/consecuencia o recomendación/obligación, y uno con detalle cambiado (hora/lugar/monto/condición) cuando sea posible.',
       'Al menos un distractor debe ser una trampa de sinónimos/paráfrasis: reutiliza una idea del audio con palabras equivalentes, pero cambia el sentido final con un matiz o dato incorrecto.',
+      'Además de esa trampa de sinónimos, al menos un distractor (distinto) debe ser una trampa de reconocimiento superficial: reutiliza palabras o expresiones LITERALES del audio pero con el sentido cambiado.',
+      'La respuesta correcta debe ser una REFORMULACIÓN del audio, nunca una copia: usa sinónimos y, sobre todo, nominalización oral→escrito formal. Ejemplos: "on va fermer la piscine" → "fermeture de la piscine"; "il a refusé de signer" → "son refus de signer"; "les prix vont monter" → "una haussa des tarifs". Prohibido reutilizar literalmente los sintagmas clave del audio en la opción correcta.',
+      'En el campo "reformulationType" de cada pregunta, indica qué transformación aplicaste a la respuesta correcta: "nominalisation" (verbo → sustantivo), "synonyme" (palabras equivalentes) o "restructuration" (reordenamiento sintáctico).',
     );
   }
-  reglas.push('La respuesta correcta también debe estar parafraseada: no copies frases literales del transcript.');
   if (!opcionesFijas) {
     reglas.push(
       'Las 4 opciones deben parecer de la misma familia: longitud parecida, mismo registro, misma categoría y estructura gramatical comparable.',
@@ -54,15 +56,18 @@ export function reglasComunes({ minWords, maxWords, questionsPerAudio, verticalS
   return `Reglas:\n${reglas.map((regla, i) => `${i + 1}. ${regla}`).join('\n')}`;
 }
 
-export function esquemaJson(questionsPerAudio, optionCount = 4) {
+export function esquemaJson(questionsPerAudio, optionCount = 4, { includeReformulationType = true } = {}) {
   const letras = ['A', 'B', 'C', 'D'].slice(0, optionCount);
   const opcionesEjemplo = letras.map(letra => `{ "id": "${letra}", "text": "..." }`).join(', ');
+  const campoReformulacion = includeReformulationType
+    ? ',\n      "reformulationType": "nominalisation|synonyme|restructuration"'
+    : '';
   const pregunta = `{
       "prompt": "Pregunta en francés",
       "options": [${opcionesEjemplo}],
       "correctId": "A",
       "feedback": "Explicación breve en español.",
-      "justification": "cita textual del transcript"
+      "justification": "cita textual del transcript"${campoReformulacion}
     }`;
   return `Estructura JSON requerida:
 {
