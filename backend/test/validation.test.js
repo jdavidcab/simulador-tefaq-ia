@@ -13,12 +13,13 @@ function preguntaValida(transcript) {
     options: [
       { id: 'A', text: 'Une panne de chauffage' },
       { id: 'B', text: 'Une fuite d’eau' },
-      { id: 'C', text: 'Un bruit de voisinage' },
+      { id: 'C', text: 'Un bruit de voisinage proche de mot20 et mot21' },
       { id: 'D', text: 'Une porte bloquée' },
     ],
     correctId: 'B',
     feedback: 'La locataire signale de l’eau au plafond.',
     justification: transcript.split(' ').slice(0, 10).join(' '),
+    reformulationType: 'nominalisation',
   };
 }
 
@@ -103,6 +104,40 @@ test('rechaza justification que no está en el transcript', () => {
   const item = itemValido('annonce_publique', 45);
   item.questions[0].justification = 'ceci ne figure absolument nulle part dans le message';
   assert.throws(() => validateItem(item, 'annonce_publique'), /justification/);
+});
+
+test('adjunta metadata de reformulación en secciones no excluidas', () => {
+  const item = itemValido('annonce_publique', 45);
+  const validado = validateItem(item, 'annonce_publique');
+  assert.deepEqual(validado.questions[0].reformulation, {
+    extrait_audio: validado.questions[0].justification,
+    option_correcte: 'Une fuite d’eau',
+    type: 'nominalisation',
+  });
+});
+
+test('rechaza una pregunta sin reformulationType en secciones no excluidas', () => {
+  const item = itemValido('annonce_publique', 45);
+  delete item.questions[0].reformulationType;
+  assert.throws(() => validateItem(item, 'annonce_publique'), /reformulationType/);
+});
+
+test('el chequeo de reformulación se salta para micro_trottoir', () => {
+  const posturas = MICRO_TROTTOIR_POSTURES[CONFIG.microTrottoirOptions];
+  const transcript = palabras(55);
+  const item = {
+    transcript,
+    questions: [{
+      prompt: 'Quelle est la position de la personne interviewée ?',
+      options: posturas.map((text, i) => ({ id: 'ABCD'[i], text })),
+      correctId: 'B',
+      feedback: 'La persona expresa esta postura con matices.',
+      justification: transcript.split(' ').slice(0, 10).join(' '),
+      // deliberadamente sin reformulationType ni distractor-trampa: si el
+      // guard de sectionType fallara, esto rechazaría el ítem.
+    }],
+  };
+  assert.doesNotThrow(() => validateItem(item, 'micro_trottoir', { posture: posturas[1] }));
 });
 
 test('micro_trottoir exige las posturas del preset en orden fijo', () => {

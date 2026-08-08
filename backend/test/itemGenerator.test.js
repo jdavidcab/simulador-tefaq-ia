@@ -11,13 +11,14 @@ function itemJson({ palabras = 45, correctId = 'B' } = {}) {
       prompt: 'Quel est le message principal ?',
       options: [
         { id: 'A', text: 'Une première option plausible' },
-        { id: 'B', text: 'Une deuxième option plausible' },
+        { id: 'B', text: 'Une deuxième option plausible, proche de mot20 et mot21' },
         { id: 'C', text: 'Une troisième option plausible' },
-        { id: 'D', text: 'Une quatrième option plausible' },
+        { id: 'D', text: 'Une quatrième option plausible, proche de mot22 et mot23' },
       ],
       correctId,
       feedback: 'El anuncio lo dice de forma parafraseada.',
       justification: transcript.split(' ').slice(0, 10).join(' '),
+      reformulationType: 'nominalisation',
     }],
   });
 }
@@ -172,13 +173,14 @@ test('normaliza el feedback contra el correctId final aunque la letra aparezca e
       prompt: 'Quel est le message principal ?',
       options: [
         { id: 'A', text: 'Une première option plausible' },
-        { id: 'B', text: 'Une deuxième option plausible' },
+        { id: 'B', text: 'Une deuxième option plausible, proche de mot20 et mot21' },
         { id: 'C', text: 'Une troisième option plausible' },
-        { id: 'D', text: 'Une quatrième option plausible' },
+        { id: 'D', text: 'Une quatrième option plausible, proche de mot22 et mot23' },
       ],
       correctId: 'B',
       feedback: "Le message est clair sur ce point précis. L'option A est un distracteur partiellement vrai qui reprend un détail secondaire.",
       justification: 'mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9',
+      reformulationType: 'nominalisation',
     }],
   });
   const proveedor = proveedorFake('gemini', [conElisionFrancesa]);
@@ -226,13 +228,14 @@ test('conserva razonamiento que empieza con "A" como preposición española, no 
       prompt: 'Quel est le message principal ?',
       options: [
         { id: 'A', text: 'Une première option plausible' },
-        { id: 'B', text: 'Une deuxième option plausible' },
+        { id: 'B', text: 'Une deuxième option plausible, proche de mot20 et mot21' },
         { id: 'C', text: 'Une troisième option plausible' },
-        { id: 'D', text: 'Une quatrième option plausible' },
+        { id: 'D', text: 'Une quatrième option plausible, proche de mot22 et mot23' },
       ],
       correctId: 'C',
       feedback: 'A diferencia de los distractores, esta opción se apoya en un dato explícito del audio.',
       justification: 'mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9',
+      reformulationType: 'nominalisation',
     }],
   });
   const proveedor = proveedorFake('gemini', [conPreposicion]);
@@ -250,13 +253,14 @@ test('descarta el razonamiento si el feedback menciona una letra con marcador "o
       prompt: 'Quel est le message principal ?',
       options: [
         { id: 'A', text: 'Une première option plausible' },
-        { id: 'B', text: 'Une deuxième option plausible' },
+        { id: 'B', text: 'Une deuxième option plausible, proche de mot20 et mot21' },
         { id: 'C', text: 'Une troisième option plausible' },
-        { id: 'D', text: 'Une quatrième option plausible' },
+        { id: 'D', text: 'Une quatrième option plausible, proche de mot22 et mot23' },
       ],
       correctId: 'D',
       feedback: "L'option B est un distracteur partiellement vrai qui reprend un détail secondaire.",
       justification: 'mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9',
+      reformulationType: 'nominalisation',
     }],
   });
   const proveedor = proveedorFake('gemini', [conMarcador]);
@@ -278,9 +282,9 @@ test('descarta el razonamiento si el feedback dice "el distractor B" (marcador s
       prompt: 'Quel est le message principal ?',
       options: [
         { id: 'A', text: 'Une première option plausible' },
-        { id: 'B', text: 'Une deuxième option plausible' },
+        { id: 'B', text: 'Une deuxième option plausible, proche de mot20 et mot21' },
         { id: 'C', text: 'Une troisième option plausible' },
-        { id: 'D', text: 'Une quatrième option plausible' },
+        { id: 'D', text: 'Une quatrième option plausible, proche de mot22 et mot23' },
       ],
       correctId: 'A',
       // Caso real encontrado en contenido generado: "el distractor B mezcla..."
@@ -289,6 +293,7 @@ test('descarta el razonamiento si el feedback dice "el distractor B" (marcador s
       // marcador igual que "opción"/"option".
       feedback: 'El distractor B mezcla la idea de salario durante la formación con una condición que no se menciona en el audio.',
       justification: 'mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9',
+      reformulationType: 'nominalisation',
     }],
   });
   const proveedor = proveedorFake('gemini', [conDistractor]);
@@ -310,4 +315,39 @@ test('no baraja las opciones de micro_trottoir (son fijas y en orden)', async ()
   assert.deepEqual(item.questions[0].options.map(o => o.text), posturas, 'el orden y el texto de las posturas no debe cambiar');
   assert.deepEqual(item.questions[0].options.map(o => o.id), ['A', 'B', 'C']);
   assert.equal(item.questions[0].correctId, 'B');
+});
+
+test('un fallo de reformulación (opción correcta calca el audio) reintenta el MISMO proveedor', async () => {
+  const malo = JSON.stringify({
+    transcript: Array.from({ length: 45 }, (_, i) => `mot${i}`).join(' '),
+    questions: [{
+      prompt: 'Quel est le message principal ?',
+      options: [
+        { id: 'A', text: 'mot0 mot1 mot2 mot3 mot4 mot5' },
+        { id: 'B', text: 'Une deuxième option plausible, proche de mot20 et mot21' },
+        { id: 'C', text: 'Une troisième option plausible' },
+        { id: 'D', text: 'Une quatrième option plausible, proche de mot22 et mot23' },
+      ],
+      correctId: 'A',
+      feedback: 'x',
+      justification: 'mot0 mot1 mot2 mot3 mot4 mot5 mot6 mot7 mot8 mot9',
+      reformulationType: 'nominalisation',
+    }],
+  });
+  const gemini = proveedorFake('gemini', [malo, itemJson()]);
+  const deepseek = proveedorFake('deepseek', [itemJson()]);
+  const generador = createItemGenerator({ gemini, deepseek }, CONFIG);
+
+  const item = await generador.generateItem({ ...BASE, selector: ['gemini', 'deepseek'] });
+  assert.equal(item.provider, 'gemini', 'un fallo de reformulación es de validación, no de cuota/red');
+  assert.equal(item.tentativas, 2);
+  assert.equal(deepseek.llamadas.length, 0);
+});
+
+test('adjunta metadata de reformulación al ítem generado, sobreviviendo el barajado de opciones', async () => {
+  const gemini = proveedorFake('gemini', [itemJson({ correctId: 'A' })]);
+  const generador = createItemGenerator({ gemini }, CONFIG);
+  const item = await generador.generateItem({ ...BASE, selector: ['gemini'] });
+  assert.equal(item.questions[0].reformulation.type, 'nominalisation');
+  assert.equal(item.questions[0].reformulation.option_correcte, 'Une première option plausible');
 });

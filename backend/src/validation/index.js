@@ -2,12 +2,13 @@ import {
   SECTION_PRESETS, MICRO_TROTTOIR_POSTURES, wordTolerance, CONFIG as DEFAULT_CONFIG,
 } from '../examFormat.js';
 import { checkJustification } from './justification.js';
+import { checkReformulation } from './reformulation.js';
 
 export function countWords(text) {
   return String(text).split(/\s+/).filter(Boolean).length;
 }
 
-function validarPregunta(question, transcript, config, expectedOptions = 4) {
+function validarPregunta(question, transcript, config, expectedOptions = 4, sectionType) {
   if (!question || typeof question !== 'object') throw new Error('pregunta inválida');
   if (typeof question.prompt !== 'string' || !question.prompt.trim()) throw new Error('falta "prompt"');
 
@@ -29,6 +30,10 @@ function validarPregunta(question, transcript, config, expectedOptions = 4) {
   const cita = checkJustification(question.justification, transcript, config);
   if (!cita.ok) throw new Error(cita.error);
   question.justificationScore = cita.score;
+
+  if (sectionType !== 'micro_trottoir' && sectionType !== 'conversation_image') {
+    checkReformulation(question, transcript, config);
+  }
 }
 
 function validarMicroTrottoir(item, posture, config) {
@@ -93,7 +98,7 @@ export function validateItem(item, sectionType, opts = {}) {
   const expectedOptions = sectionType === 'micro_trottoir'
     ? MICRO_TROTTOIR_POSTURES[config.microTrottoirOptions].length
     : 4;
-  for (const question of item.questions) validarPregunta(question, item.transcript, config, expectedOptions);
+  for (const question of item.questions) validarPregunta(question, item.transcript, config, expectedOptions, sectionType);
 
   if (sectionType === 'micro_trottoir') validarMicroTrottoir(item, opts.posture, config);
   if (sectionType === 'interview') validarInterview(item);
