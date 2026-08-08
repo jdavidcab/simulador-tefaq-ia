@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { buildReviewModel } from './reviewModel';
 import { buildHighlightSegments } from './highlightSegments';
+import { ZoomButton, ImageZoomModal } from './ImageZoom';
 
 const API_BASE = 'http://localhost:3001';
 
@@ -69,6 +70,7 @@ const TranscriptWithHighlights = ({ transcript, questions }) => {
 const ExamReview = ({ set, answers, audioElRef, audioUrls, onBackToSummary, onExit }) => {
   const [expandedRefs, setExpandedRefs] = useState(() => new Set());
   const [playback, setPlayback] = useState({ activeRef: null, status: 'idle', error: null });
+  const [zoomedImage, setZoomedImage] = useState(null);
 
   const model = buildReviewModel(set, answers);
 
@@ -216,7 +218,7 @@ const ExamReview = ({ set, answers, audioElRef, audioUrls, onBackToSummary, onEx
                               const isChosenOpt = opt.id === question.selectedId;
                               let stateLabel = null;
                               let className = section.type === 'conversation_image'
-                                ? 'p-2 border rounded flex flex-col items-center gap-1 min-w-[160px]'
+                                ? 'p-2 border rounded flex flex-col items-center gap-1 min-w-[320px]'
                                 : 'p-2 border rounded';
                               if (isCorrectOpt && isChosenOpt) {
                                 stateLabel = 'Tu respuesta — correcta';
@@ -230,14 +232,21 @@ const ExamReview = ({ set, answers, audioElRef, audioUrls, onBackToSummary, onEx
                               }
                               if (section.type === 'conversation_image') {
                                 const imagen = (setItem.images ?? []).find(img => img.id === opt.id);
+                                const imgUrl = imagen ? `${API_BASE}/api/sets/${set.id}/${imagen.path}` : null;
                                 return (
                                   <div key={opt.id} className={className}>
-                                    {imagen && (
-                                      <img
-                                        src={`${API_BASE}/api/sets/${set.id}/${imagen.path}`}
-                                        alt={`Option ${opt.id}`}
-                                        className="w-36 h-20 object-contain"
-                                      />
+                                    {imgUrl && (
+                                      <div className="relative">
+                                        <img
+                                          src={imgUrl}
+                                          alt={`Option ${opt.id}`}
+                                          className="w-72 h-40 object-contain"
+                                        />
+                                        <ZoomButton
+                                          onClick={() => setZoomedImage({ src: imgUrl, alt: `Option ${opt.id}` })}
+                                          label={`Ampliar imagen, opción ${opt.id}`}
+                                        />
+                                      </div>
                                     )}
                                     {stateLabel && <span className="text-xs font-semibold text-center">{stateLabel}</span>}
                                   </div>
@@ -268,6 +277,12 @@ const ExamReview = ({ set, answers, audioElRef, audioUrls, onBackToSummary, onEx
       <button onClick={handleExit} className="w-full bg-gray-800 text-white py-2 rounded">
         Volver a la lista de sets
       </button>
+      <ImageZoomModal
+        src={zoomedImage?.src}
+        alt={zoomedImage?.alt}
+        onClose={() => setZoomedImage(null)}
+        closeLabel="Cerrar"
+      />
     </div>
   );
 };

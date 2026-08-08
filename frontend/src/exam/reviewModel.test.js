@@ -51,6 +51,16 @@ test('pregunta sin responder: answered false, isCorrect false, distinto de una r
   assert.equal(q.selectedId, null);
 });
 
+test('pregunta cerrada sin responder (null, tiempo agotado): answered false, isCorrect false, igual que sin visitar', () => {
+  const set = fixtureSet();
+  const answers = { annonce_publique: { s1i1: { 0: null } } };
+  const model = buildReviewModel(set, answers);
+  const q = model.sections[0].items[0].questions[0];
+  assert.equal(q.answered, false);
+  assert.equal(q.isCorrect, false);
+  assert.equal(q.selectedId, null);
+});
+
 test('ítem de una pregunta: correctCount/questionCount del ítem', () => {
   const set = fixtureSet();
   const answers = { annonce_publique: { s1i1: { 0: 'A' }, s1i2: { 0: 'X' } } };

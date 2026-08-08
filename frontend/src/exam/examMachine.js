@@ -49,6 +49,34 @@ function advance(set, state) {
 
 const ANSWERABLE_PHASES = new Set(['avant', 'audio-pending', 'audio-playing', 'apres']);
 
+// Al vencer 'apres' el ítem actual queda cerrado -- cualquier pregunta que
+// siga sin respuesta se registra explícitamente como `null` (distinto de
+// `undefined`, que significa "todavía no llegó a este ítem"). Ese `null`
+// hace que countAnswered la cuente (ya está "resuelta", solo que incorrecta)
+// y que computeResults la trate como incorrecta igual que cualquier otra
+// respuesta que no matchea correctId.
+function lockInUnanswered(set, state) {
+  const section = set.sections[state.sectionIndex];
+  const item = section.items[state.itemIndex];
+  const existing = state.answers[section.type]?.[item.ref] ?? {};
+  const locked = { ...existing };
+  let changed = false;
+  item.questions.forEach((_, questionIndex) => {
+    if (!(questionIndex in locked)) {
+      locked[questionIndex] = null;
+      changed = true;
+    }
+  });
+  if (!changed) return state.answers;
+  return {
+    ...state.answers,
+    [section.type]: {
+      ...state.answers[section.type],
+      [item.ref]: locked,
+    },
+  };
+}
+
 export function reducer(set, state, event) {
   if (event.type === 'ABANDON') {
     return state.status === 'running' ? { ...state, status: 'abandoned' } : state;
@@ -81,7 +109,7 @@ export function reducer(set, state, event) {
       if (state.phase === 'section-intro') return { ...state, phase: 'avant' };
       if (state.phase === 'avant') return { ...state, phase: 'audio-pending' };
       if (state.phase === 'audio-playing') return { ...state, phase: 'apres' }; // watchdog
-      if (state.phase === 'apres') return advance(set, state);
+      if (state.phase === 'apres') return advance(set, { ...state, answers: lockInUnanswered(set, state) });
       return state;
     }
 

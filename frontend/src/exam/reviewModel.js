@@ -8,7 +8,11 @@ export function buildReviewModel(set, answers) {
       const itemAnswers = answers[section.type]?.[item.ref] ?? {};
       const questions = item.questions.map((question, questionIndex) => {
         const selectedId = itemAnswers[questionIndex];
-        const answered = selectedId !== undefined;
+        // `null` significa "el tiempo se agotó sin respuesta" (ver
+        // lockInUnanswered en examMachine.js) -- se muestra igual que
+        // `undefined` ("nunca se visitó"), ninguno de los dos es una
+        // selección real.
+        const answered = selectedId !== undefined && selectedId !== null;
         const isCorrect = answered && selectedId === question.correctId;
         return {
           questionIndex,

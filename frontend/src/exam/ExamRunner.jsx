@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useReducer, useRef, useState } from 'rea
 import { createInitialState, reducer, currentToken, computeResults, countAnswered } from './examMachine';
 import { startPhase, remainingSeconds, isExpired, chainDeadline } from './examTiming';
 import { buildProgressTabs, buildSectionTabs } from './examProgress';
+import { ZoomButton, ImageZoomModal } from './ImageZoom';
 import lfaLogo from '../assets/le-francais-des-affaires-logo.png';
 import cciLogo from '../assets/cci-paris-logo.jpg';
 
@@ -156,6 +157,7 @@ const ExamRunner = ({ set, audioElRef, audioUrls, imageUrls, onComplete, onAband
   const firedRef = useRef(false);
   const [remaining, setRemaining] = useState(0);
   const [audioCurrentTime, setAudioCurrentTime] = useState(0);
+  const [zoomedImage, setZoomedImage] = useState(null);
 
   const section = set.sections[state.sectionIndex];
   const item = section?.items?.[state.itemIndex];
@@ -281,6 +283,12 @@ const ExamRunner = ({ set, audioElRef, audioUrls, imageUrls, onComplete, onAband
     };
   }, [audioElRef, clearWatchdog]);
 
+  // No dejar una imagen ampliada de un ítem anterior abierta encima del
+  // ítem nuevo -- el examen sigue corriendo detrás del lightbox.
+  useEffect(() => {
+    setZoomedImage(null);
+  }, [state.sectionIndex, state.itemIndex]);
+
   useEffect(() => {
     if (firedRef.current) return;
     if (state.status === 'complete') {
@@ -374,26 +382,33 @@ const ExamRunner = ({ set, audioElRef, audioUrls, imageUrls, onComplete, onAband
                     <div key={`${item.ref}-${questionIndex}`}>
                       <h3 className="font-bold text-black mb-3">{question.prompt}</h3>
                       {section.type === 'conversation_image' ? (
-                        <div className="flex gap-2 flex-wrap">
+                        <div className="flex gap-3 flex-wrap">
                           {question.options.map(opt => {
                             const selected = itemAnswers[questionIndex] === opt.id;
                             const url = imageUrls.get(`${item.ref}-${opt.id}`);
                             return (
-                              <label
-                                key={opt.id}
-                                className={`flex-1 min-w-[160px] flex flex-col items-center gap-2 p-3 rounded cursor-pointer ${selected ? 'bg-gray-200' : 'hover:bg-gray-50'}`}
-                              >
-                                {url
-                                  ? <img src={url} alt={`Option ${opt.id}`} className="w-36 h-20 object-contain" />
-                                  : <div className="w-36 h-20 bg-gray-100" />}
-                                <input
-                                  type="radio"
-                                  name={`${item.ref}-q${questionIndex}`}
-                                  checked={selected}
-                                  onChange={() => handleAnswer(questionIndex, opt.id)}
-                                  className="h-4 w-4 shrink-0"
-                                />
-                              </label>
+                              <div key={opt.id} className="relative flex-1 min-w-[320px]">
+                                <label
+                                  className={`flex flex-col items-center gap-2 p-3 rounded cursor-pointer ${selected ? 'bg-gray-200' : 'hover:bg-gray-50'}`}
+                                >
+                                  {url
+                                    ? <img src={url} alt={`Option ${opt.id}`} className="w-80 h-44 object-contain" />
+                                    : <div className="w-80 h-44 bg-gray-100" />}
+                                  <input
+                                    type="radio"
+                                    name={`${item.ref}-q${questionIndex}`}
+                                    checked={selected}
+                                    onChange={() => handleAnswer(questionIndex, opt.id)}
+                                    className="h-6 w-6 shrink-0"
+                                  />
+                                </label>
+                                {url && (
+                                  <ZoomButton
+                                    onClick={() => setZoomedImage({ src: url, alt: `Option ${opt.id}` })}
+                                    label={`Agrandir l'image de l'option ${opt.id}`}
+                                  />
+                                )}
+                              </div>
                             );
                           })}
                         </div>
@@ -416,7 +431,7 @@ const ExamRunner = ({ set, audioElRef, audioUrls, imageUrls, onComplete, onAband
                                 name={`${item.ref}-q${questionIndex}`}
                                 checked={selected}
                                 onChange={() => handleAnswer(questionIndex, opt.id)}
-                                className="h-4 w-4 shrink-0"
+                                className="h-6 w-6 shrink-0"
                               />
                               <span className="text-black">{opt.text}</span>
                             </label>
@@ -443,6 +458,12 @@ const ExamRunner = ({ set, audioElRef, audioUrls, imageUrls, onComplete, onAband
       <div className="mx-10 mt-2 mb-4 border-b border-gray-100" />
       <div className="px-10 pb-2">{body}</div>
       <Footer tabs={progressTabs} onAbandon={handleAbandon} />
+      <ImageZoomModal
+        src={zoomedImage?.src}
+        alt={zoomedImage?.alt}
+        onClose={() => setZoomedImage(null)}
+        closeLabel="Fermer"
+      />
     </div>
   );
 };

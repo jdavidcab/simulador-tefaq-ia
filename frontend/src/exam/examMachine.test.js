@@ -153,6 +153,24 @@ test('preguntas sin responder quedan registradas como ausentes, no se descartan'
   assert.equal(results.correctBySection.annonce_publique, 0);
 });
 
+test('apres vence sin responder: la pregunta queda cerrada con null, no undefined, y cuenta como respondida', () => {
+  const set = fixtureSet();
+  let state = skipIntro(set, createInitialState());
+  state = runItemToApres(set, state);
+  state = dispatch(set, state, { type: 'TIMER_EXPIRED', token: currentToken(state) }); // apres vence sin responder
+  assert.equal(state.answers.annonce_publique.s1i1[0], null, 'debe cerrarse explícitamente como null, no quedar ausente');
+  assert.equal(countAnswered(state.answers), 1, 'una pregunta cerrada sin responder cuenta en el contador');
+});
+
+test('apres vence sin responder no pisa una respuesta ya elegida en ese mismo ítem', () => {
+  const set = fixtureSet();
+  let state = skipIntro(set, createInitialState());
+  state = runItemToApres(set, state);
+  state = dispatch(set, state, { type: 'ANSWER_SELECTED', token: currentToken(state), questionIndex: 0, optionId: 'A' });
+  state = dispatch(set, state, { type: 'TIMER_EXPIRED', token: currentToken(state) }); // apres vence
+  assert.equal(state.answers.annonce_publique.s1i1[0], 'A', 'una respuesta real ya elegida no debe reemplazarse por null');
+});
+
 test('el último ítem de una sección dispara section-intro de la siguiente, con sectionIndex ya incrementado', () => {
   const set = fixtureSet();
   let state = skipIntro(set, createInitialState());
@@ -226,8 +244,8 @@ test('countAnswered cuenta preguntas respondidas, no ítems', () => {
   assert.equal(countAnswered(state.answers), 1);
 
   state = runItemToApres(set, state);
-  state = dispatch(set, state, { type: 'TIMER_EXPIRED', token: currentToken(state) }); // -> item 2, sin responder
-  assert.equal(countAnswered(state.answers), 1, 'avanzar de ítem sin responder no suma');
+  state = dispatch(set, state, { type: 'TIMER_EXPIRED', token: currentToken(state) }); // -> item 2 (s1i1 ya tenía respuesta, no gana nada al cerrarse)
+  assert.equal(countAnswered(state.answers), 1, 'el ítem que avanza ya tenía respuesta real; el ítem 2, aún sin visitar, no suma');
 
   state = dispatch(set, state, { type: 'TIMER_EXPIRED', token: currentToken(state) }); // -> audio-pending
   state = dispatch(set, state, { type: 'ANSWER_SELECTED', token: currentToken(state), questionIndex: 0, optionId: 'B' });
@@ -243,9 +261,16 @@ test('countAnswered cuenta cada pregunta de un ítem multi-pregunta por separado
   state = dispatch(set, state, { type: 'TIMER_EXPIRED', token: currentToken(state) }); // section-intro (sección 1)
   state = dispatch(set, state, { type: 'TIMER_EXPIRED', token: currentToken(state) }); // -> avant, interview
 
+  // Los 2 ítems de annonce_publique recorridos arriba vencieron sin
+  // respuesta, así que ya quedaron cerrados (contados como null) antes de
+  // llegar a interview -- la baseline captura eso para no confundirlo con
+  // el conteo del ítem multi-pregunta bajo prueba.
+  const baseline = countAnswered(state.answers);
+  assert.equal(baseline, 2, 'los 2 ítems previos, vencidos sin responder, ya quedaron cerrados');
+
   state = runItemToApres(set, state);
   state = dispatch(set, state, { type: 'ANSWER_SELECTED', token: currentToken(state), questionIndex: 0, optionId: 'A' });
-  assert.equal(countAnswered(state.answers), 1);
+  assert.equal(countAnswered(state.answers), baseline + 1);
   state = dispatch(set, state, { type: 'ANSWER_SELECTED', token: currentToken(state), questionIndex: 1, optionId: 'C' });
-  assert.equal(countAnswered(state.answers), 2, 'las 2 preguntas del mismo ítem cuentan por separado');
+  assert.equal(countAnswered(state.answers), baseline + 2, 'las 2 preguntas del mismo ítem cuentan por separado');
 });
