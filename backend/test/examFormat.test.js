@@ -90,4 +90,6 @@ test('CONFIG expone los parámetros calibrables con sus defaults', () => {
   assert.equal(CONFIG.microTrottoirOptions, 3);
   assert.equal(CONFIG.validationRetries, 2);
   assert.equal(CONFIG.piloteCount, 4);
+  assert.equal(CONFIG.reformulationOverlapThreshold, 0.6);
+  assert.equal(CONFIG.reformulationMinTrapWords, 2);
 });

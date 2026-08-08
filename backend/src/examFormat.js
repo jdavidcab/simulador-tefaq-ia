@@ -42,6 +42,8 @@ export const CONFIG = {
   microTrottoirOptions: 3,        // 3 o 4
   validationRetries: 2,           // reintentos en el MISMO proveedor
   piloteCount: 4,
+  reformulationOverlapThreshold: 0.6,  // por encima de esto, la opción correcta calca el audio
+  reformulationMinTrapWords: 2,        // mínimo de palabras literales compartidas para contar como trampa
 };
 
 // ±2 fijo sería absurdamente estrecho para una interview de 200-300 palabras.
