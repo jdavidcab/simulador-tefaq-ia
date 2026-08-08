@@ -2,7 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { buildReviewModel } from './reviewModel';
 import { buildHighlightSegments } from './highlightSegments';
 
+const API_BASE = 'http://localhost:3001';
+
 const SECTION_LABELS = {
+  conversation_image: 'Conversación (imagen)',
   annonce_publique: 'Anuncios públicos',
   repondeur: 'Contestador',
   micro_trottoir: 'Micro-trottoir',
@@ -207,12 +210,14 @@ const ExamReview = ({ set, answers, audioElRef, audioUrls, onBackToSummary, onEx
                           {!question.answered && (
                             <p className="text-sm text-amber-700 font-semibold">Sin respuesta</p>
                           )}
-                          <div className="space-y-1">
+                          <div className={section.type === 'conversation_image' ? 'flex gap-2 flex-wrap' : 'space-y-1'}>
                             {setQuestion.options.map(opt => {
                               const isCorrectOpt = opt.id === question.correctId;
                               const isChosenOpt = opt.id === question.selectedId;
                               let stateLabel = null;
-                              let className = 'p-2 border rounded';
+                              let className = section.type === 'conversation_image'
+                                ? 'p-2 border rounded flex flex-col items-center gap-1 min-w-[160px]'
+                                : 'p-2 border rounded';
                               if (isCorrectOpt && isChosenOpt) {
                                 stateLabel = 'Tu respuesta — correcta';
                                 className += ' border-green-400 bg-green-50';
@@ -222,6 +227,21 @@ const ExamReview = ({ set, answers, audioElRef, audioUrls, onBackToSummary, onEx
                               } else if (isChosenOpt) {
                                 stateLabel = 'Tu respuesta — incorrecta';
                                 className += ' border-red-400 bg-red-50';
+                              }
+                              if (section.type === 'conversation_image') {
+                                const imagen = (setItem.images ?? []).find(img => img.id === opt.id);
+                                return (
+                                  <div key={opt.id} className={className}>
+                                    {imagen && (
+                                      <img
+                                        src={`${API_BASE}/api/sets/${set.id}/${imagen.path}`}
+                                        alt={`Option ${opt.id}`}
+                                        className="w-36 h-20 object-contain"
+                                      />
+                                    )}
+                                    {stateLabel && <span className="text-xs font-semibold text-center">{stateLabel}</span>}
+                                  </div>
+                                );
                               }
                               return (
                                 <div key={opt.id} className={className}>

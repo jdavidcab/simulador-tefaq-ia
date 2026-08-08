@@ -10,6 +10,7 @@ const WATCHDOG_GRACE_MS = 1000;
 const SECTION_INTRO_SECONDS = 15;
 
 const SECTION_LABELS = {
+  conversation_image: 'Conversation (image)',
   annonce_publique: 'Annonces publiques',
   repondeur: 'Répondeur',
   micro_trottoir: 'Micro-trottoir',
@@ -20,6 +21,7 @@ const SECTION_LABELS = {
 };
 
 const SECTION_INSTRUCTIONS = {
+  conversation_image: 'Vous allez entendre une courte conversation. Écoutez-la et choisissez l\'image qui lui correspond.',
   annonce_publique: 'Vous allez entendre des annonces publiques. Écoutez chacune et répondez à la question.',
   repondeur: 'Vous allez entendre des messages de répondeur téléphonique. Écoutez chacun et répondez à la question.',
   micro_trottoir: 'Vous allez entendre un micro-trottoir : plusieurs personnes donnent leur opinion. Écoutez chacune et répondez à la question.',
@@ -143,7 +145,7 @@ const Footer = ({ tabs, onAbandon }) => (
   </div>
 );
 
-const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
+const ExamRunner = ({ set, audioElRef, audioUrls, imageUrls, onComplete, onAbandon }) => {
   const [state, dispatch] = useReducer((s, e) => reducer(set, s, e), undefined, createInitialState);
   const stateRef = useRef(state);
   useEffect(() => { stateRef.current = state; }, [state]);
@@ -371,7 +373,31 @@ const ExamRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
                   {questions.map((question, questionIndex) => (
                     <div key={`${item.ref}-${questionIndex}`}>
                       <h3 className="font-bold text-black mb-3">{question.prompt}</h3>
-                      {useSelect ? (
+                      {section.type === 'conversation_image' ? (
+                        <div className="flex gap-2 flex-wrap">
+                          {question.options.map(opt => {
+                            const selected = itemAnswers[questionIndex] === opt.id;
+                            const url = imageUrls.get(`${item.ref}-${opt.id}`);
+                            return (
+                              <label
+                                key={opt.id}
+                                className={`flex-1 min-w-[160px] flex flex-col items-center gap-2 p-3 rounded cursor-pointer ${selected ? 'bg-gray-200' : 'hover:bg-gray-50'}`}
+                              >
+                                {url
+                                  ? <img src={url} alt={`Option ${opt.id}`} className="w-36 h-20 object-contain" />
+                                  : <div className="w-36 h-20 bg-gray-100" />}
+                                <input
+                                  type="radio"
+                                  name={`${item.ref}-q${questionIndex}`}
+                                  checked={selected}
+                                  onChange={() => handleAnswer(questionIndex, opt.id)}
+                                  className="h-4 w-4 shrink-0"
+                                />
+                              </label>
+                            );
+                          })}
+                        </div>
+                      ) : useSelect ? (
                         <OptionSelect
                           options={question.options}
                           value={itemAnswers[questionIndex]}

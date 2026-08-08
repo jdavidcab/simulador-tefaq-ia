@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { writeSet, readSet, listSets, deleteSet, setDir, audioDir, nuevoSetId } from '../src/sets/store.js';
+import { writeSet, readSet, listSets, deleteSet, setDir, audioDir, imagesDir, nuevoSetId } from '../src/sets/store.js';
 
 function setDePrueba(id = 'set-test-1') {
   return {
@@ -83,6 +83,10 @@ test('deleteSet borra la carpeta entera', async () => {
   await writeSet(dataDir, setDePrueba());
   await deleteSet(dataDir, 'set-test-1');
   assert.deepEqual(await listSets(dataDir), []);
+});
+
+test('imagesDir construye la ruta de imágenes del set', () => {
+  assert.equal(imagesDir('/data', 'set-2026-01-01-abcd'), '/data/sets/set-2026-01-01-abcd/images');
 });
 
 test('nuevoSetId incluye la fecha y un sufijo aleatorio', () => {

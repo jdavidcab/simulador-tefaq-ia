@@ -6,6 +6,7 @@ import {
 } from '../src/examFormat.js';
 import { topicsForSection } from '../src/topics/catalog.js';
 import { createRng, sampleWithoutReplacement } from '../src/rng.js';
+import { IMAGE_CATEGORIES } from '../src/topics/imageCategories.js';
 
 // Catálogo sintético: suficiente para SET_STANDARD_36 con holgura.
 function catalogoAmplio() {
@@ -259,4 +260,38 @@ test('con pilotes añade 4 ítems de una sola pregunta', () => {
 test('sin pilotes ningún ítem va marcado', () => {
   const { plan } = planTopics({ catalog: catalogoAmplio(), ...OPCIONES_BASE });
   assert.ok(plan.every(p => p.pilote === false));
+});
+
+test('conversation_image recibe 4 categorías del catálogo de imágenes, no temas', () => {
+  const { plan } = planTopics({
+    catalog: catalogoAmplio(),
+    compositionKey: 'SET_STANDARD_40',
+    recentPlans: [],
+    seed: 99,
+    pilotes: false,
+    config: CONFIG,
+  });
+  const entradasImagen = plan.filter(p => p.sectionType === 'conversation_image');
+  assert.equal(entradasImagen.length, 4);
+  const idsValidos = new Set(IMAGE_CATEGORIES.map(c => c.id));
+  for (const entrada of entradasImagen) {
+    assert.ok(idsValidos.has(entrada.topicId), `${entrada.topicId} no es una categoría de imagen válida`);
+  }
+  assert.equal(new Set(entradasImagen.map(e => e.topicId)).size, 4, 'las 4 categorías deben ser distintas');
+});
+
+test('SET_STANDARD_40 pone conversation_image primero, con refs s1i1..s1i4', () => {
+  const { plan } = planTopics({
+    catalog: catalogoAmplio(),
+    compositionKey: 'SET_STANDARD_40',
+    recentPlans: [],
+    seed: 99,
+    pilotes: false,
+    config: CONFIG,
+  });
+  assert.equal(plan[0].sectionType, 'conversation_image');
+  assert.equal(plan[0].ref, 's1i1');
+  assert.equal(plan[3].ref, 's1i4');
+  assert.equal(plan[4].sectionType, 'annonce_publique');
+  assert.equal(plan[4].ref, 's2i1');
 });

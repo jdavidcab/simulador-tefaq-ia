@@ -4,8 +4,9 @@ import dotenv from 'dotenv';
 import { createProviders, VALID_SELECTORS } from './src/providers/index.js';
 import { createItemGenerator } from './src/itemGenerator.js';
 import { pcmToWav, getStableIndex, createSynth } from './src/audio/synth.js';
+import { createImageSynth } from './src/images/synth.js';
 import { createPipeline } from './src/sets/pipeline.js';
-import { listSets, readSet, deleteSet, audioDir } from './src/sets/store.js';
+import { listSets, readSet, deleteSet, audioDir, imagesDir } from './src/sets/store.js';
 import { VALID_DIFFICULTIES } from './src/prompt/profiles.js';
 import { TOPICS } from './src/topics/catalog.js';
 import { join } from 'node:path';
@@ -30,7 +31,11 @@ const TTS_API_KEY = process.env.TTS_GEMINI_API_KEY || process.env.GEMINI_API_KEY
 const DATA_DIR = fileURLToPath(new URL('./data/', import.meta.url));
 const generator = createItemGenerator(providers);
 const synth = createSynth({ apiKey: TTS_API_KEY, voices: TTS_VOICES });
-const pipeline = createPipeline({ dataDir: DATA_DIR, generator, synth });
+// Comparte cuota con TTS (separada de la del texto) en vez de con
+// GEMINI_API_KEY -- los modelos de generación de imagen suelen tener un
+// tier gratuito mucho más estricto que los de texto.
+const imageSynth = createImageSynth({ apiKey: TTS_API_KEY });
+const pipeline = createPipeline({ dataDir: DATA_DIR, generator, synth, imageSynth });
 
 // El modo entrenamiento sigue usando el formato de una sola pregunta corta.
 const SECCION_ENTRENAMIENTO = 'divers';
@@ -371,6 +376,15 @@ app.get('/api/sets/:id/audio/:archivo', (req, res) => {
   }
   res.sendFile(join(audioDir(DATA_DIR, req.params.id), req.params.archivo), error => {
     if (error) res.status(404).json({ error: 'Audio no encontrado' });
+  });
+});
+
+app.get('/api/sets/:id/images/:archivo', (req, res) => {
+  if (!/^[\w-]+\.jpg$/.test(req.params.archivo)) {
+    return res.status(400).json({ error: 'Nombre de imagen inválido' });
+  }
+  res.sendFile(join(imagesDir(DATA_DIR, req.params.id), req.params.archivo), error => {
+    if (error) res.status(404).json({ error: 'Imagen no encontrada' });
   });
 });
 

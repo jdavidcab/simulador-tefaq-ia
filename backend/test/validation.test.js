@@ -179,3 +179,45 @@ test('rechaza una palabra por encima del límite superior de tolerancia (64 pala
   const item = itemValido('annonce_publique', 64);
   assert.throws(() => validateItem(item, 'annonce_publique'), /fuera de rango/);
 });
+
+function itemConversationImageValido(overrides = {}) {
+  return {
+    transcript: 'Bonjour, je cherche une baguette et un croissant pour ce matin, vous en avez encore ? Oui bien sûr, je vous les prépare tout de suite avec plaisir.',
+    questions: [{
+      prompt: 'Quelle image correspond à la conversation ?',
+      options: [
+        { id: 'A', text: 'Une baguette', imagePrompt: 'Un pain baguette sur un comptoir' },
+        { id: 'B', text: 'Un croissant', imagePrompt: 'Un croissant sur une assiette' },
+        { id: 'C', text: 'Une pizza', imagePrompt: 'Une pizza sur une table' },
+        { id: 'D', text: 'Une salade', imagePrompt: 'Une salade dans un bol' },
+      ],
+      correctId: 'A',
+      feedback: 'Se menciona explícitamente una baguette.',
+      justification: 'je cherche une baguette et un croissant pour ce matin, vous en avez encore',
+    }],
+    ...overrides,
+  };
+}
+
+test('valida un ítem correcto de conversation_image', () => {
+  const item = itemConversationImageValido();
+  assert.doesNotThrow(() => validateItem(item, 'conversation_image', { minWords: 5, maxWords: 100 }));
+});
+
+test('rechaza una opción de conversation_image sin imagePrompt', () => {
+  const item = itemConversationImageValido();
+  delete item.questions[0].options[0].imagePrompt;
+  assert.throws(
+    () => validateItem(item, 'conversation_image', { minWords: 5, maxWords: 100 }),
+    /imagePrompt/,
+  );
+});
+
+test('rechaza una opción de conversation_image con imagePrompt vacío', () => {
+  const item = itemConversationImageValido();
+  item.questions[0].options[1].imagePrompt = '   ';
+  assert.throws(
+    () => validateItem(item, 'conversation_image', { minWords: 5, maxWords: 100 }),
+    /imagePrompt/,
+  );
+});

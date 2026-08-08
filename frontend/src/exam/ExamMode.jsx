@@ -5,6 +5,7 @@ import ExamReview from './ExamReview';
 import ExamSummary from './ExamSummary';
 import { checkSetCompatibility } from './setCompatibility';
 import { preloadSetAudio, revokeAudioUrls } from './audioPreload';
+import { preloadSetImages } from './imagePreload';
 
 const API_BASE = 'http://localhost:3001';
 const ACTIVE_PHASES = new Set(['preloading', 'unlock', 'running']);
@@ -22,6 +23,7 @@ const ExamMode = ({ onActiveChange }) => {
 
   const audioElRef = useRef(null);
   const audioUrlsRef = useRef(new Map());
+  const imageUrlsRef = useRef(new Map());
   const preloadAbortRef = useRef(null);
   // El cuerpo del efecto (no solo su cleanup) tiene que volver a poner
   // mountedRef.current = true: bajo React.StrictMode (dev), React monta ->
@@ -62,6 +64,10 @@ const ExamMode = ({ onActiveChange }) => {
   const resetAudio = useCallback(() => {
     revokeAudioUrls(audioUrlsRef.current);
     audioUrlsRef.current = new Map();
+    // Las URLs de imagen no tienen ciclo de revoke (ver imagePreload.js), pero
+    // igual hay que vaciar el mapa aquí: si no, claves de un set elegido
+    // anteriormente se acumulan indefinidamente entre selecciones de set.
+    imageUrlsRef.current = new Map();
     setFailedRefs([]);
     setPreloadProgress({ done: 0, total: 0 });
     if (audioElRef.current) {
@@ -86,26 +92,52 @@ const ExamMode = ({ onActiveChange }) => {
   // handleSelect llama a esto en el mismo tick que setSetId(chosenId), antes
   // de que React re-renderice, así que un runPreload cerrado sobre el estado
   // vería todavía el setId ANTERIOR (null en la primera selección).
-  const runPreload = useCallback(async (refs, id) => {
+  const runPreload = useCallback(async (refs, imageEntries, id) => {
     const controller = new AbortController();
     preloadAbortRef.current = controller;
     setPhase('preloading');
-    const { urls, failedRefs: failed } = await preloadSetAudio({
-      setId: id,
-      refs,
-      signal: controller.signal,
-      onProgress: setPreloadProgress,
+
+    const progresoAudio = { done: 0, total: refs.length };
+    const progresoImagenes = { done: 0, total: imageEntries.length };
+    const reportarCombinado = () => setPreloadProgress({
+      done: progresoAudio.done + progresoImagenes.done,
+      total: progresoAudio.total + progresoImagenes.total,
     });
+
+    const [audioResult, imageResult] = await Promise.all([
+      preloadSetAudio({
+        setId: id,
+        refs,
+        signal: controller.signal,
+        onProgress: p => { progresoAudio.done = p.done; reportarCombinado(); },
+      }),
+      preloadSetImages({
+        setId: id,
+        images: imageEntries,
+        signal: controller.signal,
+        onProgress: p => { progresoImagenes.done = p.done; reportarCombinado(); },
+      }),
+    ]);
+
     // Compara la identidad de ESTA llamada, no el ref mutable: si mientras
     // esperábamos, otra llamada a runPreload ya reemplazó preloadAbortRef.current
     // con un controller nuevo, esta resolución es obsoleta -- no debe tocar el
     // estado de la operación nueva, ni siquiera si su propio controller nunca
     // se abortó explícitamente. Revocar lo descargado: nadie más lo hará.
     if (controller.signal.aborted || preloadAbortRef.current !== controller) {
-      revokeAudioUrls(urls);
+      revokeAudioUrls(audioResult.urls);
       return;
     }
-    for (const [ref, url] of urls) audioUrlsRef.current.set(ref, url);
+    // Un reintento (handleRetryFailed) llega aquí con audioUrlsRef.current ya
+    // poblado de un intento anterior -- revocar y vaciar ANTES de repoblar,
+    // si no las URLs viejas quedan huérfanas (nadie las revoca nunca) y cada
+    // click en "Reintentar fallidos" filtra ~un set entero de blobs de audio.
+    revokeAudioUrls(audioUrlsRef.current);
+    audioUrlsRef.current = new Map();
+    for (const [ref, url] of audioResult.urls) audioUrlsRef.current.set(ref, url);
+    for (const [key, url] of imageResult.urls) imageUrlsRef.current.set(key, url);
+
+    const failed = [...audioResult.failedRefs, ...imageResult.failedKeys];
     if (failed.length > 0) {
       setFailedRefs(failed);
       setPhase('preload-failed');
@@ -132,7 +164,11 @@ const ExamMode = ({ onActiveChange }) => {
       }
       setSetDetail(data);
       const refs = data.sections.flatMap(section => section.items.map(item => item.ref));
-      await runPreload(refs, chosenId);
+      const imageEntries = data.sections
+        .filter(section => section.type === 'conversation_image')
+        .flatMap(section => section.items.flatMap(item =>
+          (item.images ?? []).map(img => ({ key: `${item.ref}-${img.id}`, path: img.path }))));
+      await runPreload(refs, imageEntries, chosenId);
     } catch (error) {
       if (!mountedRef.current) return;
       setLoadError(error.message);
@@ -141,8 +177,13 @@ const ExamMode = ({ onActiveChange }) => {
   }, [runPreload]);
 
   const handleRetryFailed = useCallback(() => {
-    runPreload(failedRefs, setId);
-  }, [runPreload, failedRefs, setId]);
+    const refs = setDetail.sections.flatMap(section => section.items.map(item => item.ref));
+    const imageEntries = setDetail.sections
+      .filter(section => section.type === 'conversation_image')
+      .flatMap(section => section.items.flatMap(item =>
+        (item.images ?? []).map(img => ({ key: `${item.ref}-${img.id}`, path: img.path }))));
+    runPreload(refs, imageEntries, setId);
+  }, [runPreload, setDetail, setId]);
 
   const handleUnlock = useCallback(async () => {
     // Toda la función va envuelta: NADA de lo de aquí adentro (ref nula,
@@ -257,6 +298,7 @@ const ExamMode = ({ onActiveChange }) => {
           set={setDetail}
           audioElRef={audioElRef}
           audioUrls={audioUrlsRef.current}
+          imageUrls={imageUrlsRef.current}
           onComplete={handleComplete}
           onAbandon={goToPicker}
         />

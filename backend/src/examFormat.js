@@ -1,7 +1,7 @@
 // Presets del formato TEFAQ. SOLO DATOS: aquí se calibra contra el examen real.
 // Tiempos en segundos, del livret oficial 2024.
 export const SECTION_PRESETS = {
-  conversation_image: { bloc: 1, questions: 4,  avant: 5,  apres: 10, questionsPerAudio: 1, minWords: 40,  maxWords: 70,  lectures: 1 },
+  conversation_image: { bloc: 1, questions: 4,  avant: 5,  apres: 10, questionsPerAudio: 1, minWords: 40,  maxWords: 55,  lectures: 1 },
   annonce_publique:   { bloc: 2, questions: 4,  avant: 10, apres: 10, questionsPerAudio: 1, minWords: 30,  maxWords: 60,  lectures: 1 },
   repondeur:          { bloc: 2, questions: 6,  avant: 10, apres: 10, questionsPerAudio: 1, minWords: 30,  maxWords: 60,  lectures: 1 },
   micro_trottoir:     { bloc: 2, questions: 6,  avant: 5,  apres: 15, questionsPerAudio: 1, minWords: 40,  maxWords: 70,  lectures: 1 },
@@ -11,7 +11,10 @@ export const SECTION_PRESETS = {
   divers:             { bloc: 4, questions: 10, avant: 10, apres: 15, questionsPerAudio: 1, minWords: 60,  maxWords: 120, lectures: 1 },
 };
 
-// conversation_image no tiene constructor de prompt todavía (slice 4).
+// Las 7 secciones que comparten la ruta genérica de generación (texto ->
+// audio). No incluye conversation_image: tiene su propio constructor de
+// prompt y un paso extra de generación de imágenes (ver sets/pipeline.js).
+// SET_STANDARD_40 la antepone aparte (no aquí) para no duplicarla.
 export const GENERABLE_SECTIONS = [
   'annonce_publique', 'repondeur', 'micro_trottoir',
   'chronique', 'interview', 'reportage', 'divers',
