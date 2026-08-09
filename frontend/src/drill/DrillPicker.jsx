@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { generateDrillSet } from './generateDrillSet';
+import { generateDrillSet, resumeDrillSet } from './generateDrillSet';
 
 const API_BASE = 'http://localhost:3001';
 
@@ -17,6 +17,8 @@ const DrillPicker = ({ onSelect }) => {
   const [typeFilter, setTypeFilter] = useState('');
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState(null);
+  const [resumingId, setResumingId] = useState(null);
+  const [resumeError, setResumeError] = useState(null);
 
   const loadSets = useCallback(async () => {
     setLoading(true);
@@ -25,7 +27,7 @@ const DrillPicker = ({ onSelect }) => {
       const res = await fetch(`${API_BASE}/api/sets?format=SET_DRILL_PARAPHRASE`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-      setSets(data.filter(set => set.statut === 'complet'));
+      setSets(data);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -42,9 +44,30 @@ const DrillPicker = ({ onSelect }) => {
       await generateDrillSet({ typeFilter: typeFilter || undefined });
       await loadSets();
     } catch (err) {
-      setGenerateError(err.message);
+      if (err.code === 'timeout') {
+        setGenerateError(
+          `El drill "${err.setId}" sigue generándose en el servidor (tardó más de lo esperado, pero no se cortó). `
+          + 'Actualizá la lista en unos minutos en vez de generar uno nuevo -- generar otro ahora sumaría gasto de API en paralelo.',
+        );
+      } else {
+        setGenerateError(err.message);
+      }
     } finally {
       setGenerating(false);
+      await loadSets();
+    }
+  };
+
+  const handleResume = async (setId) => {
+    setResumingId(setId);
+    setResumeError(null);
+    try {
+      await resumeDrillSet({ setId });
+    } catch (err) {
+      setResumeError(err.message);
+    } finally {
+      setResumingId(null);
+      await loadSets();
     }
   };
 
@@ -77,6 +100,13 @@ const DrillPicker = ({ onSelect }) => {
         {generateError && <p className="text-red-600 text-sm">{generateError}</p>}
       </div>
 
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-gray-500">
+          {!loading && !error && `${sets.length} set(s)`}
+        </span>
+        <button onClick={loadSets} className="text-sm text-blue-600 hover:underline">Actualizar lista</button>
+      </div>
+
       {loading && <div className="text-center py-6 text-blue-600">Cargando drills disponibles...</div>}
 
       {error && (
@@ -86,8 +116,10 @@ const DrillPicker = ({ onSelect }) => {
         </div>
       )}
 
+      {resumeError && <p className="text-red-600 text-sm text-center">{resumeError}</p>}
+
       {!loading && !error && sets.length === 0 && (
-        <p className="text-center py-6 text-gray-600">No hay drills listos todavía. Generá uno arriba.</p>
+        <p className="text-center py-6 text-gray-600">No hay drills todavía. Generá uno arriba.</p>
       )}
 
       {!loading && !error && sets.length > 0 && (
@@ -98,11 +130,26 @@ const DrillPicker = ({ onSelect }) => {
                 <p className="font-semibold">{set.id}</p>
                 <p className="text-sm text-gray-600">
                   {set.total} ítems · generado {new Date(set.genere_le).toLocaleString()}
+                  {set.statut === 'partial' && ` · ${set.prets}/${set.total} listos`}
                 </p>
               </div>
-              <button onClick={() => onSelect(set.id)} className="bg-blue-600 text-white px-4 py-2 rounded">
-                Elegir
-              </button>
+              {set.statut === 'complet' && (
+                <button onClick={() => onSelect(set.id)} className="bg-blue-600 text-white px-4 py-2 rounded">
+                  Elegir
+                </button>
+              )}
+              {set.statut === 'partial' && set.enCours && (
+                <span className="text-sm text-blue-600">Generando...</span>
+              )}
+              {set.statut === 'partial' && !set.enCours && (
+                <button
+                  onClick={() => handleResume(set.id)}
+                  disabled={resumingId === set.id}
+                  className="bg-amber-600 text-white px-4 py-2 rounded disabled:opacity-50"
+                >
+                  {resumingId === set.id ? 'Reanudando...' : 'Reanudar'}
+                </button>
+              )}
             </div>
           ))}
         </div>

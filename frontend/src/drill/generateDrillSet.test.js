@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { generateDrillSet } from './generateDrillSet.js';
+import { generateDrillSet, resumeDrillSet } from './generateDrillSet.js';
 
 function fakeFetch(responses) {
   let call = 0;
@@ -87,6 +87,57 @@ test('rechaza con un error de timeout si no llega a un estado terminal a tiempo'
   ]);
   await assert.rejects(
     () => generateDrillSet({ fetchImpl, pollIntervalMs: 1, timeoutMs: 5 }),
+    (error) => {
+      assert.equal(error.code, 'timeout');
+      return true;
+    },
+  );
+});
+
+test('resumeDrillSet resuelve con el set cuando el pipeline termina complet', async () => {
+  const fetchImpl = fakeFetch([
+    { status: 200, body: { statut: 'partial' } },
+    { status: 200, body: { total: 12, generes: 12, prets: 12, echoues: 0, statut: 'complet', enCours: false } },
+  ]);
+  const set = await resumeDrillSet({ setId: 'set-2026-01-01-abcd', fetchImpl, pollIntervalMs: 1 });
+  assert.equal(set.id, 'set-2026-01-01-abcd');
+  assert.equal(set.statut, 'complet');
+});
+
+test('resumeDrillSet rechaza con un error definitivo en un HTTP 4xx/5xx del resume', async () => {
+  const fetchImpl = fakeFetch([{ status: 409, body: { error: 'El set ya está en curso' } }]);
+  await assert.rejects(
+    () => resumeDrillSet({ setId: 'set-2026-01-01-abcd', fetchImpl, pollIntervalMs: 1 }),
+    (error) => {
+      assert.equal(error.code, 'http');
+      assert.match(error.message, /en curso/);
+      return true;
+    },
+  );
+});
+
+test('resumeDrillSet rechaza con un error "stalled" cuando el pipeline se detiene sin terminar', async () => {
+  const fetchImpl = fakeFetch([
+    { status: 200, body: { statut: 'partial' } },
+    { status: 200, body: { total: 12, generes: 8, prets: 7, echoues: 1, statut: 'partial', enCours: false } },
+  ]);
+  await assert.rejects(
+    () => resumeDrillSet({ setId: 'set-2026-01-01-abcd', fetchImpl, pollIntervalMs: 1 }),
+    (error) => {
+      assert.equal(error.code, 'stalled');
+      assert.equal(error.echoues, 1);
+      return true;
+    },
+  );
+});
+
+test('resumeDrillSet rechaza con un error de timeout si no llega a un estado terminal a tiempo', async () => {
+  const fetchImpl = fakeFetch([
+    { status: 200, body: { statut: 'partial' } },
+    { status: 200, body: { total: 12, generes: 1, prets: 1, echoues: 0, statut: 'partial', enCours: true } },
+  ]);
+  await assert.rejects(
+    () => resumeDrillSet({ setId: 'set-2026-01-01-abcd', fetchImpl, pollIntervalMs: 1, timeoutMs: 5 }),
     (error) => {
       assert.equal(error.code, 'timeout');
       return true;

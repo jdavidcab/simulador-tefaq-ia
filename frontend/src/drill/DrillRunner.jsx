@@ -84,6 +84,7 @@ const DrillRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
       return;
     }
     audioEl.src = url;
+    setAudioCurrentTime(0);
     audioEl.play().then(
       () => dispatch({ type: 'AUDIO_PLAYING', token }),
       () => dispatch({ type: 'AUDIO_FAILED', token }),
@@ -172,7 +173,9 @@ const DrillRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
     const displayRemaining = (state.phase === 'audio-pending' || state.phase === 'audio-playing') ? 0 : remaining;
     body = (
       <div className="space-y-6">
-        {state.phase === 'audio-pending' && <p className="text-center text-blue-600 text-sm">Preparando audio...</p>}
+        <p className="text-center text-blue-600 text-sm h-5">
+          {state.phase === 'audio-pending' ? 'Preparando audio...' : ' '}
+        </p>
         <div className="text-center text-3xl font-mono text-red-600">
           00:{displayRemaining.toString().padStart(2, '0')}
         </div>
