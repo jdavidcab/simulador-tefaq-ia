@@ -369,3 +369,31 @@ test('las marcas de trampa literal (literalTrap) sobreviven al barajado de opcio
   assert.equal(trampaD.literalTrap, true, 'el caso de dos distractores calificando a la vez debe sobrevivir el barajado con ambas marcas intactas');
   assert.ok(!otra.literalTrap, 'una opción que nunca compartió palabras literales no debe quedar marcada');
 });
+
+test('generateItem pasa expectedReformulationType al prompt y a la validación', async () => {
+  const transcript = Array.from({ length: 25 }, (_, i) => `mot${i}`).join(' ');
+  const itemJsonDrill = JSON.stringify({
+    transcript,
+    questions: [{
+      prompt: 'Quel est le message ?',
+      options: [
+        { id: 'A', text: 'Une option plausible' },
+        { id: 'B', text: 'Une deuxième option plausible, proche de mot10 et mot11' },
+        { id: 'C', text: 'Une troisième option plausible' },
+        { id: 'D', text: 'Une quatrième option plausible' },
+      ],
+      correctId: 'A',
+      feedback: 'f',
+      justification: transcript.split(' ').slice(0, 10).join(' '),
+      reformulationType: 'synonyme',
+    }],
+  });
+  const gemini = proveedorFake('gemini', [itemJsonDrill]);
+  const generador = createItemGenerator({ gemini }, CONFIG);
+  const item = await generador.generateItem({
+    sectionType: 'drill_paraphrase', topic: 'un aviso corto', difficulty: 'B2',
+    expectedReformulationType: 'synonyme', selector: ['gemini'],
+  });
+  assert.equal(item.questions[0].reformulation.type, 'synonyme');
+  assert.ok(gemini.llamadas[0].includes('específicamente un SINÓNIMO'), 'el prompt enviado debe incluir la instrucción forzada');
+});

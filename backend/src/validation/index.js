@@ -8,7 +8,7 @@ export function countWords(text) {
   return String(text).split(/\s+/).filter(Boolean).length;
 }
 
-function validarPregunta(question, transcript, config, expectedOptions = 4, sectionType) {
+function validarPregunta(question, transcript, config, expectedOptions = 4, sectionType, expectedReformulationType) {
   if (!question || typeof question !== 'object') throw new Error('pregunta inválida');
   if (typeof question.prompt !== 'string' || !question.prompt.trim()) throw new Error('falta "prompt"');
 
@@ -32,7 +32,10 @@ function validarPregunta(question, transcript, config, expectedOptions = 4, sect
   question.justificationScore = cita.score;
 
   if (sectionType !== 'micro_trottoir' && sectionType !== 'conversation_image') {
-    checkReformulation(question, transcript, config);
+    const configEfectivo = sectionType === 'drill_paraphrase'
+      ? { ...config, reformulationOverlapThreshold: config.drillReformulationOverlapThreshold }
+      : config;
+    checkReformulation(question, transcript, configEfectivo, { expectedType: expectedReformulationType });
   }
 }
 
@@ -98,7 +101,9 @@ export function validateItem(item, sectionType, opts = {}) {
   const expectedOptions = sectionType === 'micro_trottoir'
     ? MICRO_TROTTOIR_POSTURES[config.microTrottoirOptions].length
     : 4;
-  for (const question of item.questions) validarPregunta(question, item.transcript, config, expectedOptions, sectionType);
+  for (const question of item.questions) {
+    validarPregunta(question, item.transcript, config, expectedOptions, sectionType, opts.expectedReformulationType);
+  }
 
   if (sectionType === 'micro_trottoir') validarMicroTrottoir(item, opts.posture, config);
   if (sectionType === 'interview') validarInterview(item);

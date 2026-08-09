@@ -256,3 +256,88 @@ test('rechaza una opción de conversation_image con imagePrompt vacío', () => {
     /imagePrompt/,
   );
 });
+
+function preguntaDrillValida(transcript, overrides = {}) {
+  return {
+    prompt: 'Quel est le message ?',
+    options: [
+      { id: 'A', text: 'Fermeture temporaire du service' },
+      { id: 'B', text: `On ferme le service ${transcript.split(' ')[0]} ${transcript.split(' ')[1]}` },
+      { id: 'C', text: 'Une autre option plausible' },
+      { id: 'D', text: 'Encore une autre option' },
+    ],
+    correctId: 'A',
+    feedback: 'f',
+    justification: transcript.split(' ').slice(0, 10).join(' '),
+    reformulationType: 'nominalisation',
+    ...overrides,
+  };
+}
+
+test('drill_paraphrase usa el umbral 0.5, más estricto que las demás secciones (0.75)', () => {
+  const transcript = palabras(25);
+  const justification = transcript.split(' ').slice(0, 10).join(' '); // mot0..mot9
+  // "mot0 mot2 mot4 mot50" comparte 3 de sus 4 palabras de contenido con la
+  // justification (mot0, mot2, mot4 están en mot0..mot9; mot50 no) --
+  // overlap exacto 0.75, y NO es substring literal de la justification (el
+  // orden/huecos evitan el atajo de coincidencia exacta de scoreJustification).
+  const preguntaConSolapamiento075 = {
+    prompt: 'Quel est le message ?',
+    options: [
+      { id: 'A', text: 'mot0 mot2 mot4 mot50' },
+      { id: 'B', text: 'On ferme le service mot20 mot21' },
+      { id: 'C', text: 'Une autre option plausible' },
+      { id: 'D', text: 'Encore une autre option' },
+    ],
+    correctId: 'A',
+    feedback: 'f',
+    justification,
+    reformulationType: 'nominalisation',
+  };
+
+  assert.throws(
+    () => validateItem({ transcript, questions: [preguntaConSolapamiento075] }, 'drill_paraphrase', { minWords: 15, maxWords: 40 }),
+    /solapa/,
+  );
+  assert.doesNotThrow(
+    () => validateItem({ transcript, questions: [preguntaConSolapamiento075] }, 'annonce_publique', { minWords: 15, maxWords: 40 }),
+  );
+});
+
+test('un solapamiento exactamente en el umbral de drill (0.5) se acepta, no se rechaza', () => {
+  const transcript = palabras(25);
+  const justification = transcript.split(' ').slice(0, 10).join(' '); // mot0..mot9
+  // "mot0 mot50" comparte 1 de sus 2 palabras de contenido con la
+  // justification -- overlap exacto 0.5. La condición de rechazo es
+  // estrictamente `overlapScore > threshold`, así que 0.5 no debe rechazarse.
+  const preguntaEnElUmbral = {
+    prompt: 'Quel est le message ?',
+    options: [
+      { id: 'A', text: 'mot0 mot50' },
+      { id: 'B', text: 'On ferme le service mot20 mot21' },
+      { id: 'C', text: 'Une autre option plausible' },
+      { id: 'D', text: 'Encore une autre option' },
+    ],
+    correctId: 'A',
+    feedback: 'f',
+    justification,
+    reformulationType: 'nominalisation',
+  };
+  assert.doesNotThrow(
+    () => validateItem({ transcript, questions: [preguntaEnElUmbral] }, 'drill_paraphrase', { minWords: 15, maxWords: 40 }),
+  );
+});
+
+test('validateItem pasa expectedReformulationType hasta checkReformulation', () => {
+  const transcript = palabras(25);
+  const item = { transcript, questions: [preguntaDrillValida(transcript)] };
+  assert.doesNotThrow(() => validateItem(item, 'drill_paraphrase', {
+    minWords: 15, maxWords: 40, expectedReformulationType: 'nominalisation',
+  }));
+
+  const itemMismatch = { transcript, questions: [preguntaDrillValida(transcript)] };
+  assert.throws(
+    () => validateItem(itemMismatch, 'drill_paraphrase', { minWords: 15, maxWords: 40, expectedReformulationType: 'synonyme' }),
+    /se pidió el tipo "synonyme"/,
+  );
+});

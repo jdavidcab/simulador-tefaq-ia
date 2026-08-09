@@ -77,7 +77,7 @@ export function esFalloDeCuotaORed(error) {
 export function createItemGenerator(providers, config = DEFAULT_CONFIG) {
   return {
     async generateItem(opts) {
-      const { sectionType, topic, difficulty, posture } = opts;
+      const { sectionType, topic, difficulty, posture, expectedReformulationType } = opts;
       const cadena = opts.selector ?? AUTO_CHAIN;
       const disponibles = cadena.filter(key => providers[key]);
 
@@ -88,7 +88,7 @@ export function createItemGenerator(providers, config = DEFAULT_CONFIG) {
       }
 
       const prompt = buildSectionPrompt(sectionType, {
-        topic, difficulty, posture,
+        topic, difficulty, posture, expectedReformulationType,
         minWords: opts.minWords, maxWords: opts.maxWords, verticalScan: opts.verticalScan,
       });
 
@@ -106,7 +106,7 @@ export function createItemGenerator(providers, config = DEFAULT_CONFIG) {
             const texto = await provider.generate(prompt);
             const bruto = JSON.parse(limpiarMarkdown(texto));
             const validado = validateItem(bruto, sectionType, {
-              config, posture, minWords: opts.minWords, maxWords: opts.maxWords,
+              config, posture, expectedReformulationType, minWords: opts.minWords, maxWords: opts.maxWords,
             });
 
             // Las opciones de micro_trottoir son fijas: barajarlas rompería el contrato.
