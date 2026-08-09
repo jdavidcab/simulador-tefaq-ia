@@ -22,7 +22,11 @@ export async function generateDrillSet({
     signal,
   });
   const generateData = await generateRes.json();
-  if (!generateRes.ok) throw new Error(generateData.error || `HTTP ${generateRes.status}`);
+  if (!generateRes.ok) {
+    const error = new Error(generateData.error || `HTTP ${generateRes.status}`);
+    error.code = 'http';
+    throw error;
+  }
   const setId = generateData.id;
 
   const deadline = Date.now() + timeoutMs;
@@ -37,7 +41,11 @@ export async function generateDrillSet({
 
     const statusRes = await fetchImpl(`${API_BASE}/api/sets/${setId}/status`, { signal });
     const statusData = await statusRes.json();
-    if (!statusRes.ok) throw new Error(statusData.error || `HTTP ${statusRes.status}`);
+    if (!statusRes.ok) {
+      const error = new Error(statusData.error || `HTTP ${statusRes.status}`);
+      error.code = 'http';
+      throw error;
+    }
 
     if (statusData.statut === 'complet') {
       return { id: setId, ...statusData };

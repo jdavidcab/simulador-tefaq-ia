@@ -4,7 +4,7 @@ import { generateDrillSet } from './generateDrillSet.js';
 
 function fakeFetch(responses) {
   let call = 0;
-  return async (url, opts) => {
+  const callTracker = async (url, opts) => {
     const response = responses[Math.min(call, responses.length - 1)];
     call += 1;
     return {
@@ -13,6 +13,8 @@ function fakeFetch(responses) {
       json: async () => response.body,
     };
   };
+  callTracker.callCount = () => call;
+  return callTracker;
 }
 
 test('resuelve con el set cuando el pipeline termina complet', async () => {
@@ -53,7 +55,29 @@ test('rechaza con un error "stalled" cuando el pipeline se detiene sin terminar'
 
 test('rechaza con un error definitivo en un HTTP 4xx/5xx', async () => {
   const fetchImpl = fakeFetch([{ status: 400, body: { error: 'formato inválido' } }]);
-  await assert.rejects(() => generateDrillSet({ fetchImpl, pollIntervalMs: 1 }), /formato inválido/);
+  await assert.rejects(
+    () => generateDrillSet({ fetchImpl, pollIntervalMs: 1 }),
+    (error) => {
+      assert.equal(error.code, 'http');
+      assert.match(error.message, /formato inválido/);
+      return true;
+    },
+  );
+});
+
+test('rechaza con error http si la primera consulta de estado falla', async () => {
+  const fetchImpl = fakeFetch([
+    { status: 201, body: { id: 'set-2026-01-01-abcd', total: 12, statut: 'partial' } },
+    { status: 500, body: { error: 'error de servidor' } },
+  ]);
+  await assert.rejects(
+    () => generateDrillSet({ fetchImpl, pollIntervalMs: 1 }),
+    (error) => {
+      assert.equal(error.code, 'http');
+      assert.match(error.message, /error de servidor/);
+      return true;
+    },
+  );
 });
 
 test('rechaza con un error de timeout si no llega a un estado terminal a tiempo', async () => {
@@ -70,18 +94,22 @@ test('rechaza con un error de timeout si no llega a un estado terminal a tiempo'
   );
 });
 
-test('se detiene sin resolver ni rechazar de forma observable si el signal se aborta', async () => {
+test('se detiene sin resolver ni rechazar de forma observable si el signal se aborta durante sleep', async () => {
   const controller = new AbortController();
   const fetchImpl = fakeFetch([
     { status: 201, body: { id: 'set-2026-01-01-abcd', total: 12, statut: 'partial' } },
     { status: 200, body: { total: 12, generes: 1, prets: 1, echoues: 0, statut: 'partial', enCours: true } },
   ]);
-  const promise = generateDrillSet({ fetchImpl, pollIntervalMs: 5, signal: controller.signal });
+  const promise = generateDrillSet({ fetchImpl, pollIntervalMs: 50, signal: controller.signal });
+  // Abort while the loop's sleep(50ms) is in-flight, before the next poll could fire
+  await new Promise(r => setTimeout(r, 20));
   controller.abort();
   await assert.rejects(
     () => promise,
     (error) => {
       assert.equal(error.name, 'AbortError');
+      // Verify the loop actually ran and hit sleep: POST (call 1) + status poll (call 2) + loop attempted sleep
+      assert.ok(fetchImpl.callCount() > 1, `Expected > 1 calls, got ${fetchImpl.callCount()}`);
       return true;
     },
   );
