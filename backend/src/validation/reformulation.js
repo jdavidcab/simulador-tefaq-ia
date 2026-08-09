@@ -21,6 +21,15 @@ const REFORMULATION_TYPES = ['nominalisation', 'synonyme', 'restructuration'];
 //   la garantía de "al menos una trampa literal" queda delegada en la
 //   instrucción del prompt, no realmente forzada por este check. Esto es el
 //   comportamiento esperado según el diseño, no un bug.
+export function findLiteralTrapOptionIds(question, transcript, config) {
+  const palabrasTranscript = new Set(contentWords(transcript));
+  return question.options
+    .filter(option => option.id !== question.correctId)
+    .filter(option => contentWords(option.text)
+      .filter(palabra => palabrasTranscript.has(palabra)).length >= config.reformulationMinTrapWords)
+    .map(option => option.id);
+}
+
 export function checkReformulation(question, transcript, config) {
   const correctOption = question.options.find(option => option.id === question.correctId);
 
@@ -32,12 +41,8 @@ export function checkReformulation(question, transcript, config) {
     );
   }
 
-  const palabrasTranscript = new Set(contentWords(transcript));
-  const hayTrampaLiteral = question.options
-    .filter(option => option.id !== question.correctId)
-    .some(option => contentWords(option.text)
-      .filter(palabra => palabrasTranscript.has(palabra)).length >= config.reformulationMinTrapWords);
-  if (!hayTrampaLiteral) {
+  const trapIds = findLiteralTrapOptionIds(question, transcript, config);
+  if (trapIds.length === 0) {
     throw new Error(
       `reformulation: ningún distractor recicla al menos ${config.reformulationMinTrapWords} `
       + 'palabras literales del audio (trampa obligatoria ausente)',
@@ -49,6 +54,10 @@ export function checkReformulation(question, transcript, config) {
       `reformulation: "reformulationType" debe ser uno de ${REFORMULATION_TYPES.join('|')}, `
       + `llegó "${question.reformulationType}"`,
     );
+  }
+
+  for (const option of question.options) {
+    if (trapIds.includes(option.id)) option.literalTrap = true;
   }
 
   question.reformulation = {

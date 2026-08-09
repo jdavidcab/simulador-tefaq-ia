@@ -351,3 +351,21 @@ test('adjunta metadata de reformulación al ítem generado, sobreviviendo el bar
   assert.equal(item.questions[0].reformulation.type, 'nominalisation');
   assert.equal(item.questions[0].reformulation.option_correcte, 'Une première option plausible');
 });
+
+test('las marcas de trampa literal (literalTrap) sobreviven al barajado de opciones, identificadas por texto', async () => {
+  const gemini = proveedorFake('gemini', [itemJson({ correctId: 'A' })]);
+  const generador = createItemGenerator({ gemini }, CONFIG);
+  const item = await generador.generateItem({ ...BASE, selector: ['gemini'] });
+
+  const opciones = item.questions[0].options;
+  const correcta = opciones.find(o => o.id === item.questions[0].correctId);
+  const trampaB = opciones.find(o => o.text === 'Une deuxième option plausible, proche de mot20 et mot21');
+  const trampaD = opciones.find(o => o.text === 'Une quatrième option plausible, proche de mot22 et mot23');
+  const otra = opciones.find(o => o.text === 'Une troisième option plausible');
+
+  assert.equal(correcta.text, 'Une première option plausible');
+  assert.ok(!correcta.literalTrap, 'la opción correcta nunca debe quedar marcada como trampa literal');
+  assert.equal(trampaB.literalTrap, true, 'la trampa original (mot20/mot21) debe seguir marcada tras el barajado, identificada por texto ya que su id cambió');
+  assert.equal(trampaD.literalTrap, true, 'el caso de dos distractores calificando a la vez debe sobrevivir el barajado con ambas marcas intactas');
+  assert.ok(!otra.literalTrap, 'una opción que nunca compartió palabras literales no debe quedar marcada');
+});
