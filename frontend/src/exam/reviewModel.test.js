@@ -22,6 +22,35 @@ function fixtureSet() {
   };
 }
 
+function fixtureSetReformulacion(questionOverrides = {}) {
+  return {
+    sections: [
+      {
+        type: 'annonce_publique',
+        items: [
+          {
+            ref: 's1i1',
+            questions: [{
+              correctId: 'A',
+              options: [
+                { id: 'A', text: 'Fermeture de la piscine' },
+                { id: 'B', text: 'Une option quelconque', literalTrap: true },
+                { id: 'C', text: 'Une autre option' },
+              ],
+              reformulation: {
+                extrait_audio: 'on va fermer la piscine cet été',
+                option_correcte: 'Fermeture de la piscine',
+                type: 'nominalisation',
+              },
+              ...questionOverrides,
+            }],
+          },
+        ],
+      },
+    ],
+  };
+}
+
 test('pregunta correcta: answered true, isCorrect true', () => {
   const set = fixtureSet();
   const answers = { annonce_publique: { s1i1: { 0: 'A' } } };
@@ -92,4 +121,76 @@ test('sección sin ninguna respuesta: correctCount 0, questionCount igual a las 
   const model = buildReviewModel(set, {});
   assert.equal(model.sections[1].correctCount, 0);
   assert.equal(model.sections[1].questionCount, 2);
+});
+
+test('pregunta fallada con reformulation completa: el modelo expone el bloque', () => {
+  const set = fixtureSetReformulacion();
+  const answers = { annonce_publique: { s1i1: { 0: 'C' } } };
+  const model = buildReviewModel(set, answers);
+  const q = model.sections[0].items[0].questions[0];
+  assert.deepEqual(q.reformulation, {
+    extrait_audio: 'on va fermer la piscine cet été',
+    option_correcte: 'Fermeture de la piscine',
+    type: 'nominalisation',
+  });
+});
+
+test('pregunta correcta: reformulation queda null aunque la metadata cruda sea válida', () => {
+  const set = fixtureSetReformulacion();
+  const answers = { annonce_publique: { s1i1: { 0: 'A' } } };
+  const model = buildReviewModel(set, answers);
+  assert.equal(model.sections[0].items[0].questions[0].reformulation, null);
+});
+
+test('sin responder: reformulation presente (cuenta como fallada), selectedLiteralTrap false', () => {
+  const set = fixtureSetReformulacion();
+  const model = buildReviewModel(set, {});
+  const q = model.sections[0].items[0].questions[0];
+  assert.deepEqual(q.reformulation, {
+    extrait_audio: 'on va fermer la piscine cet été',
+    option_correcte: 'Fermeture de la piscine',
+    type: 'nominalisation',
+  });
+  assert.equal(q.selectedLiteralTrap, false);
+});
+
+test('set sin metadata de reformulación (sections/items sin options ni reformulation): reformulation null', () => {
+  const set = fixtureSet();
+  const answers = { annonce_publique: { s1i1: { 0: 'B' } } };
+  const model = buildReviewModel(set, answers);
+  const q = model.sections[0].items[0].questions[0];
+  assert.equal(q.reformulation, null);
+  assert.equal(q.selectedLiteralTrap, false);
+});
+
+test('reformulation con type inválido: se trata como ausente', () => {
+  const set = fixtureSetReformulacion({
+    reformulation: { extrait_audio: 'texto', option_correcte: 'Fermeture de la piscine', type: 'paraphrase' },
+  });
+  const answers = { annonce_publique: { s1i1: { 0: 'C' } } };
+  const model = buildReviewModel(set, answers);
+  assert.equal(model.sections[0].items[0].questions[0].reformulation, null);
+});
+
+test('reformulation con extrait_audio vacío: se trata como ausente', () => {
+  const set = fixtureSetReformulacion({
+    reformulation: { extrait_audio: '', option_correcte: 'Fermeture de la piscine', type: 'nominalisation' },
+  });
+  const answers = { annonce_publique: { s1i1: { 0: 'C' } } };
+  const model = buildReviewModel(set, answers);
+  assert.equal(model.sections[0].items[0].questions[0].reformulation, null);
+});
+
+test('opción incorrecta elegida que NO es la trampa: selectedLiteralTrap false', () => {
+  const set = fixtureSetReformulacion();
+  const answers = { annonce_publique: { s1i1: { 0: 'C' } } };
+  const model = buildReviewModel(set, answers);
+  assert.equal(model.sections[0].items[0].questions[0].selectedLiteralTrap, false);
+});
+
+test('opción incorrecta elegida que SÍ es la trampa: selectedLiteralTrap true', () => {
+  const set = fixtureSetReformulacion();
+  const answers = { annonce_publique: { s1i1: { 0: 'B' } } };
+  const model = buildReviewModel(set, answers);
+  assert.equal(model.sections[0].items[0].questions[0].selectedLiteralTrap, true);
 });
