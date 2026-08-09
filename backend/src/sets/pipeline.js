@@ -9,6 +9,15 @@ import { esFalloDeCuotaORed } from '../itemGenerator.js';
 
 const FORMATOS_SOPORTADOS = ['SET_STANDARD_36', 'SET_STANDARD_40', 'SET_DRILL_PARAPHRASE'];
 
+// SET_STANDARD_36/40 son ambos exámenes reales y comparten familia de
+// historial (uno debe evitar repetir los temas del otro); el drill vive en
+// su propia familia para no contaminar ni ser contaminado por los exámenes.
+const FAMILIAS_HISTORIAL = {
+  SET_STANDARD_36: ['SET_STANDARD_36', 'SET_STANDARD_40'],
+  SET_STANDARD_40: ['SET_STANDARD_36', 'SET_STANDARD_40'],
+  SET_DRILL_PARAPHRASE: ['SET_DRILL_PARAPHRASE'],
+};
+
 const ESTILO_NEUTRO = 'Un boceto simple en blanco y negro, trazo limpio tipo dibujo lineal minimalista, fondo blanco, sin sombreado complejo, sin texto ni letras visibles en la imagen. Estilo de referencia neutro, sin ningún tema concreto todavía -- solo el trazo y el nivel de detalle que deben compartir las siguientes imágenes.';
 
 function promptDeOpcion(imagePrompt) {
@@ -60,7 +69,7 @@ export function createPipeline({ dataDir, generator, synth, imageSynth, catalog 
       }
 
       const semilla = seed ?? Math.floor(Math.random() * 2 ** 31);
-      const recentPlans = await readRecentPlans(join(dataDir, 'sets'), config.historyWindow);
+      const recentPlans = await readRecentPlans(join(dataDir, 'sets'), config.historyWindow, FAMILIAS_HISTORIAL[format]);
       const { plan, relaxations } = planTopics({
         catalog, compositionKey: format, recentPlans, seed: semilla, pilotes, config,
       });

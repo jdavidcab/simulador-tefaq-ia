@@ -5,10 +5,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readRecentPlans } from '../src/topics/history.js';
 
-async function crearSet(setsDir, id, genereLe, plan) {
+async function crearSet(setsDir, id, genereLe, plan, format) {
   const dir = join(setsDir, id);
   await mkdir(dir, { recursive: true });
-  await writeFile(join(dir, 'set.json'), JSON.stringify({ id, genere_le: genereLe, plan }));
+  await writeFile(join(dir, 'set.json'), JSON.stringify({ id, genere_le: genereLe, plan, format }));
 }
 
 test('devuelve los planes de los N sets más recientes, del más nuevo al más viejo', async () => {
@@ -69,4 +69,36 @@ test('plan como objeto se convierte a array vacío', async () => {
   await crearSet(setsDir, 'set-bad-object', '2026-01-01T00:00:00Z', {});
   const planes = await readRecentPlans(setsDir, 3);
   assert.deepEqual(planes, [[]]);
+});
+
+test('con formats, excluye un set cuyo format no matchea aunque sea el más reciente', async () => {
+  const setsDir = await mkdtemp(join(tmpdir(), 'hist-'));
+  await crearSet(setsDir, 'set-exam', '2026-01-01T00:00:00Z', [{ sectionType: 'divers', topicId: 't-exam' }], 'SET_STANDARD_36');
+  await crearSet(setsDir, 'set-drill', '2026-02-01T00:00:00Z', [{ sectionType: 'drill_paraphrase', topicId: 't-drill' }], 'SET_DRILL_PARAPHRASE');
+
+  const planes = await readRecentPlans(setsDir, 5, ['SET_STANDARD_36', 'SET_STANDARD_40']);
+  assert.equal(planes.length, 1);
+  assert.equal(planes[0][0].topicId, 't-exam');
+});
+
+test('con formats, el window solo cuenta sobre el subconjunto que matchea', async () => {
+  const setsDir = await mkdtemp(join(tmpdir(), 'hist-'));
+  await crearSet(setsDir, 'set-exam-1', '2026-01-01T00:00:00Z', [{ sectionType: 'divers', topicId: 't-exam-1' }], 'SET_STANDARD_36');
+  await crearSet(setsDir, 'set-exam-2', '2026-02-01T00:00:00Z', [{ sectionType: 'divers', topicId: 't-exam-2' }], 'SET_STANDARD_40');
+  await crearSet(setsDir, 'set-drill', '2026-03-01T00:00:00Z', [{ sectionType: 'drill_paraphrase', topicId: 't-drill' }], 'SET_DRILL_PARAPHRASE');
+
+  const planes = await readRecentPlans(setsDir, 1, ['SET_STANDARD_36', 'SET_STANDARD_40']);
+  assert.equal(planes.length, 1);
+  assert.equal(planes[0][0].topicId, 't-exam-2');
+});
+
+test('sin formats (2 argumentos), el comportamiento no cambia', async () => {
+  const setsDir = await mkdtemp(join(tmpdir(), 'hist-'));
+  await crearSet(setsDir, 'set-exam', '2026-01-01T00:00:00Z', [{ sectionType: 'divers', topicId: 't-exam' }], 'SET_STANDARD_36');
+  await crearSet(setsDir, 'set-drill', '2026-02-01T00:00:00Z', [{ sectionType: 'drill_paraphrase', topicId: 't-drill' }], 'SET_DRILL_PARAPHRASE');
+
+  const planes = await readRecentPlans(setsDir, 5);
+  assert.equal(planes.length, 2);
+  assert.equal(planes[0][0].topicId, 't-drill');
+  assert.equal(planes[1][0].topicId, 't-exam');
 });

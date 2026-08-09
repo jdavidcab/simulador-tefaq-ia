@@ -495,6 +495,54 @@ test('el typeFilter persistido sobrevive una reanudación en una instancia de pi
   assert.ok(recibidosSegundaCorrida.every(t => t === 'synonyme'), 'el filtro debe leerse de set.drill persistido, no de la llamada actual');
 });
 
+function catalogoConDiversJusto() {
+  const temas = [];
+  const porSeccion = {
+    annonce_publique: 30, repondeur: 30, micro_trottoir: 30,
+    chronique: 30, interview: 30, reportage: 30,
+  };
+  let n = 1;
+  for (const [seccion, cantidad] of Object.entries(porSeccion)) {
+    for (let i = 0; i < cantidad; i += 1) {
+      temas.push({ id: `t-${String(n).padStart(4, '0')}`, text: `tema ${n}`, sections: [seccion] });
+      n += 1;
+    }
+  }
+  // divers con exactamente 12 temas: el mismo tamaño que demanda el drill
+  // (drill_paraphrase toma su pool de 'divers', ver catalog.js). Si el drill
+  // contaminara el historial de un examen posterior (bug de este item), el
+  // pool de divers para el examen quedaría en 0 y forzaría una relajación de
+  // ventana a fenetre:0 -- eso es lo que este test detecta.
+  for (let i = 0; i < 12; i += 1) {
+    temas.push({ id: `t-divers-${String(i).padStart(2, '0')}`, text: `tema divers ${i}`, sections: ['divers'] });
+  }
+  return temas;
+}
+
+test('un set drill no cuenta contra la ventana de historial de un examen posterior', async () => {
+  const catalog = catalogoConDiversJusto();
+  const dataDir = await mkdtemp(join(tmpdir(), 'pipe-familia-'));
+  const pipeline = createPipeline({ dataDir, generator: generadorFake(), synth: synthFake(), catalog });
+
+  await pipeline.createSet({ seed: 40, format: 'SET_DRILL_PARAPHRASE' });
+  const examen = await pipeline.createSet({ seed: 41, format: 'SET_STANDARD_36' });
+
+  assert.ok(
+    !examen.relaxations.some(r => r.sectionType === 'divers'),
+    'el examen no debería necesitar relajar la ventana de divers por culpa del drill previo',
+  );
+
+  // Control: mismo catálogo y misma seed, pero sin ningún set previo en disco.
+  // Si el drill de verdad no contamina la familia del examen, ambas corridas
+  // deben producir exactamente el mismo plan (mismo pool disponible en ambas).
+  const dataDirControl = await mkdtemp(join(tmpdir(), 'pipe-familia-control-'));
+  const pipelineControl = createPipeline({ dataDir: dataDirControl, generator: generadorFake(), synth: synthFake(), catalog });
+  const examenControl = await pipelineControl.createSet({ seed: 41, format: 'SET_STANDARD_36' });
+
+  assert.deepEqual(examen.plan, examenControl.plan);
+  assert.deepEqual(examen.relaxations, examenControl.relaxations);
+});
+
 test('run sigue funcionando sin expectedReformulationType para sets no-drill (no-op)', async () => {
   const recibidos = [];
   const generatorQueRegistra = {

@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 // El historial se deriva de los set.json en disco: una sola fuente de verdad.
 // Borrar la carpeta de un set libera sus temas sin código de limpieza.
-export async function readRecentPlans(setsDir, window) {
+export async function readRecentPlans(setsDir, window, formats) {
   if (window <= 0) return [];
 
   let entries;
@@ -19,6 +19,7 @@ export async function readRecentPlans(setsDir, window) {
     try {
       const raw = await readFile(join(setsDir, entry.name, 'set.json'), 'utf8');
       const data = JSON.parse(raw);
+      if (formats && !formats.includes(data.format)) continue;
       sets.push({ genere_le: data.genere_le ?? '', plan: Array.isArray(data.plan) ? data.plan : [] });
     } catch {
       // Carpeta sin set.json o JSON corrupto: no debe tumbar la planificación.

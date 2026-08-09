@@ -353,14 +353,17 @@ app.post('/api/sets/:id/resume', async (req, res) => {
 
 const FORMATOS_EXAMEN = ['SET_STANDARD_36', 'SET_STANDARD_40'];
 
+export function filtrarSetsPorFormato(sets, formato) {
+  return formato
+    ? sets.filter(set => set.format === formato)
+    : sets.filter(set => FORMATOS_EXAMEN.includes(set.format));
+}
+
 app.get('/api/sets', async (req, res) => {
   try {
     const sets = await listSets(DATA_DIR);
-    const formato = req.query.format;
-    const filtrados = formato
-      ? sets.filter(set => set.format === formato)
-      : sets.filter(set => FORMATOS_EXAMEN.includes(set.format));
-    res.json(filtrados);
+    const filtrados = filtrarSetsPorFormato(sets, req.query.format);
+    res.json(filtrados.map(set => ({ ...set, enCours: pipeline.isRunning(set.id) })));
   } catch (error) {
     res.status(error.status ?? 500).json({ error: error.message });
   }

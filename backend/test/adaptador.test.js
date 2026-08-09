@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { app, aplanarItem, temaAleatorioParaSeccion } from '../server.js';
+import { app, aplanarItem, temaAleatorioParaSeccion, filtrarSetsPorFormato } from '../server.js';
 import { TOPICS } from '../src/topics/catalog.js';
 import { REFORMULATION_TYPES } from '../src/validation/reformulation.js';
 
@@ -146,18 +146,26 @@ test('POST /api/sets/generate rechaza un typeFilter inválido con 400', async ()
   });
 });
 
-test('GET /api/sets sin ?format= excluye SET_DRILL_PARAPHRASE (solo formatos de examen)', async () => {
-  await conServidor(async (base) => {
-    const res = await fetch(`${base}/api/sets`);
-    const data = await res.json();
-    assert.ok(data.every(set => set.format === 'SET_STANDARD_36' || set.format === 'SET_STANDARD_40'));
-  });
+test('filtrarSetsPorFormato sin formato deja solo los formatos de examen', () => {
+  const sets = [
+    { id: 'a', format: 'SET_STANDARD_36' },
+    { id: 'b', format: 'SET_STANDARD_40' },
+    { id: 'c', format: 'SET_DRILL_PARAPHRASE' },
+  ];
+  const resultado = filtrarSetsPorFormato(sets, undefined);
+  assert.deepEqual(resultado.map(s => s.id), ['a', 'b']);
 });
 
-test('GET /api/sets?format=SET_DRILL_PARAPHRASE excluye los formatos de examen', async () => {
-  await conServidor(async (base) => {
-    const res = await fetch(`${base}/api/sets?format=SET_DRILL_PARAPHRASE`);
-    const data = await res.json();
-    assert.ok(data.every(set => set.format === 'SET_DRILL_PARAPHRASE'));
-  });
+test('filtrarSetsPorFormato con formato=SET_DRILL_PARAPHRASE excluye los de examen', () => {
+  const sets = [
+    { id: 'a', format: 'SET_STANDARD_36' },
+    { id: 'b', format: 'SET_DRILL_PARAPHRASE' },
+  ];
+  const resultado = filtrarSetsPorFormato(sets, 'SET_DRILL_PARAPHRASE');
+  assert.deepEqual(resultado.map(s => s.id), ['b']);
+});
+
+test('filtrarSetsPorFormato con formato desconocido no revienta, solo no matchea nada', () => {
+  const sets = [{ id: 'a', format: 'SET_STANDARD_36' }];
+  assert.deepEqual(filtrarSetsPorFormato(sets, 'NO_EXISTE'), []);
 });
