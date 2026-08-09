@@ -404,3 +404,109 @@ test('esFalloDeCuotaORed en el paso de imágenes detiene la tanda completa', asy
   const itemsImagen = resultado.sections.find(s => s.type === 'conversation_image').items;
   assert.ok(itemsImagen.every(item => item.etat !== 'pret'));
 });
+
+test('createSet rechaza formato SET_DRILL_PARAPHRASE hasta agregarlo a FORMATOS_SOPORTADOS', async () => {
+  const { pipeline } = await nuevoPipeline();
+  const set = await pipeline.createSet({ seed: 30, format: 'SET_DRILL_PARAPHRASE' });
+  assert.equal(set.format, 'SET_DRILL_PARAPHRASE');
+  assert.equal(set.plan.length, 12);
+});
+
+test('createSet rechaza pilotes:true con SET_DRILL_PARAPHRASE', async () => {
+  const { pipeline } = await nuevoPipeline();
+  await assert.rejects(
+    () => pipeline.createSet({ seed: 31, format: 'SET_DRILL_PARAPHRASE', pilotes: true }),
+    /pilot/i,
+  );
+});
+
+test('createSet persiste el typeFilter en set.drill.expectedReformulationType', async () => {
+  const { dataDir, pipeline } = await nuevoPipeline();
+  const set = await pipeline.createSet({ seed: 32, format: 'SET_DRILL_PARAPHRASE', typeFilter: 'nominalisation' });
+  assert.deepEqual(set.drill, { expectedReformulationType: 'nominalisation' });
+
+  const persistido = await readSet(dataDir, set.id);
+  assert.deepEqual(persistido.drill, { expectedReformulationType: 'nominalisation' });
+});
+
+test('createSet sin typeFilter persiste set.drill con expectedReformulationType null', async () => {
+  const { pipeline } = await nuevoPipeline();
+  const set = await pipeline.createSet({ seed: 33, format: 'SET_DRILL_PARAPHRASE' });
+  assert.deepEqual(set.drill, { expectedReformulationType: null });
+});
+
+test('createSet con formatos que no son drill nunca trae set.drill', async () => {
+  const { pipeline } = await nuevoPipeline();
+  const set = await pipeline.createSet({ seed: 34 });
+  assert.equal(set.drill, undefined);
+});
+
+test('run pasa expectedReformulationType al generador para cada ítem de un set drill', async () => {
+  const recibidos = [];
+  const generatorQueRegistra = {
+    async generateItem(opts) {
+      recibidos.push(opts.expectedReformulationType);
+      return generadorFake().generateItem(opts);
+    },
+  };
+  const dataDir = await mkdtemp(join(tmpdir(), 'pipe-drill-'));
+  const pipeline = createPipeline({ dataDir, generator: generatorQueRegistra, synth: synthFake(), catalog: catalogoAmplio() });
+  const set = await pipeline.createSet({ seed: 35, format: 'SET_DRILL_PARAPHRASE', typeFilter: 'restructuration' });
+  await pipeline.run(set.id);
+
+  assert.equal(recibidos.length, 12);
+  assert.ok(recibidos.every(t => t === 'restructuration'));
+});
+
+test('el typeFilter persistido sobrevive una reanudación en una instancia de pipeline distinta', async () => {
+  const recibidosPrimeraCorrida = [];
+  const generatorPrimeraCorrida = {
+    async generateItem(opts) {
+      recibidosPrimeraCorrida.push(opts.expectedReformulationType);
+      return generadorFake().generateItem(opts);
+    },
+  };
+  const dataDir = await mkdtemp(join(tmpdir(), 'pipe-drill-resume-'));
+  const primerPipeline = createPipeline({
+    dataDir, generator: generatorPrimeraCorrida, synth: synthFake(), catalog: catalogoAmplio(),
+  });
+  const set = await primerPipeline.createSet({ seed: 37, format: 'SET_DRILL_PARAPHRASE', typeFilter: 'synonyme' });
+  await primerPipeline.run(set.id, { maxItems: 4 });
+  assert.equal(recibidosPrimeraCorrida.length, 4);
+  assert.ok(recibidosPrimeraCorrida.every(t => t === 'synonyme'));
+
+  // Instancia de pipeline COMPLETAMENTE NUEVA (simula un proceso distinto
+  // reanudando vía POST /api/sets/:id/resume) -- nunca recibe typeFilter en
+  // su propia llamada a run(), así que si el filtro sobrevive, solo puede
+  // ser porque lo leyó de set.drill.expectedReformulationType en disco.
+  const recibidosSegundaCorrida = [];
+  const generatorSegundaCorrida = {
+    async generateItem(opts) {
+      recibidosSegundaCorrida.push(opts.expectedReformulationType);
+      return generadorFake().generateItem(opts);
+    },
+  };
+  const segundoPipeline = createPipeline({
+    dataDir, generator: generatorSegundaCorrida, synth: synthFake(), catalog: catalogoAmplio(),
+  });
+  await segundoPipeline.run(set.id);
+
+  assert.equal(recibidosSegundaCorrida.length, 8, 'deben quedar 8 ítems por generar (12 - 4 de la primera corrida)');
+  assert.ok(recibidosSegundaCorrida.every(t => t === 'synonyme'), 'el filtro debe leerse de set.drill persistido, no de la llamada actual');
+});
+
+test('run sigue funcionando sin expectedReformulationType para sets no-drill (no-op)', async () => {
+  const recibidos = [];
+  const generatorQueRegistra = {
+    async generateItem(opts) {
+      recibidos.push(opts.expectedReformulationType);
+      return generadorFake().generateItem(opts);
+    },
+  };
+  const dataDir = await mkdtemp(join(tmpdir(), 'pipe-drill-'));
+  const pipeline = createPipeline({ dataDir, generator: generatorQueRegistra, synth: synthFake(), catalog: catalogoAmplio() });
+  const set = await pipeline.createSet({ seed: 36 });
+  await pipeline.run(set.id, { maxItems: 2 });
+
+  assert.ok(recibidos.every(t => t === undefined));
+});

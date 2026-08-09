@@ -7,7 +7,7 @@ import { readRecentPlans } from '../topics/history.js';
 import { writeSet, readSet, audioDir, imagesDir, nuevoSetId, contarItems } from './store.js';
 import { esFalloDeCuotaORed } from '../itemGenerator.js';
 
-const FORMATOS_SOPORTADOS = ['SET_STANDARD_36', 'SET_STANDARD_40'];
+const FORMATOS_SOPORTADOS = ['SET_STANDARD_36', 'SET_STANDARD_40', 'SET_DRILL_PARAPHRASE'];
 
 const ESTILO_NEUTRO = 'Un boceto simple en blanco y negro, trazo limpio tipo dibujo lineal minimalista, fondo blanco, sin sombreado complejo, sin texto ni letras visibles en la imagen. Estilo de referencia neutro, sin ningún tema concreto todavía -- solo el trazo y el nivel de detalle que deben compartir las siguientes imágenes.';
 
@@ -42,7 +42,7 @@ export function createPipeline({ dataDir, generator, synth, imageSynth, catalog 
 
     statusOf,
 
-    async createSet({ difficulty = 'B2', format = 'SET_STANDARD_36', pilotes = false, seed } = {}) {
+    async createSet({ difficulty = 'B2', format = 'SET_STANDARD_36', pilotes = false, seed, typeFilter } = {}) {
       if (!FORMATOS_SOPORTADOS.includes(format)) {
         const error = new Error(`Formato no soportado: "${format}". Soportados: ${FORMATOS_SOPORTADOS.join(', ')}.`);
         error.status = 400;
@@ -50,6 +50,11 @@ export function createPipeline({ dataDir, generator, synth, imageSynth, catalog 
       }
       if (format === 'SET_STANDARD_40' && pilotes) {
         const error = new Error('SET_STANDARD_40 ya trae las 40 preguntas reales; no admite "pilotes" (darían 44).');
+        error.status = 400;
+        throw error;
+      }
+      if (format === 'SET_DRILL_PARAPHRASE' && pilotes) {
+        const error = new Error('SET_DRILL_PARAPHRASE no admite "pilotes" (el tamaño de la ráfaga es fijo).');
         error.status = 400;
         throw error;
       }
@@ -98,6 +103,10 @@ export function createPipeline({ dataDir, generator, synth, imageSynth, catalog 
         }),
       };
 
+      if (format === 'SET_DRILL_PARAPHRASE') {
+        set.drill = { expectedReformulationType: typeFilter ?? null };
+      }
+
       await writeSet(dataDir, set);
       return set;
     },
@@ -128,6 +137,7 @@ export function createPipeline({ dataDir, generator, synth, imageSynth, catalog 
                 topicId: item.topicId,
                 difficulty: set.difficulty,
                 posture: item.posture,
+                expectedReformulationType: set.drill?.expectedReformulationType,
               });
               item.transcript = generado.transcript;
               item.questions = generado.questions;
