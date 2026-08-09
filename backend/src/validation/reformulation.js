@@ -1,7 +1,7 @@
 import { contentWords } from './frenchWords.js';
 import { scoreJustification } from './justification.js';
 
-const REFORMULATION_TYPES = ['nominalisation', 'synonyme', 'restructuration'];
+export const REFORMULATION_TYPES = ['nominalisation', 'synonyme', 'restructuration'];
 
 // Aplica solo a las 6 secciones de opciones generadas por el modelo (no
 // micro_trottoir, cuyas opciones son posturas fijas, ni conversation_image,
@@ -30,7 +30,7 @@ export function findLiteralTrapOptionIds(question, transcript, config) {
     .map(option => option.id);
 }
 
-export function checkReformulation(question, transcript, config) {
+export function checkReformulation(question, transcript, config, { expectedType } = {}) {
   const correctOption = question.options.find(option => option.id === question.correctId);
 
   const overlapScore = scoreJustification(correctOption.text, question.justification);
@@ -53,6 +53,12 @@ export function checkReformulation(question, transcript, config) {
     throw new Error(
       `reformulation: "reformulationType" debe ser uno de ${REFORMULATION_TYPES.join('|')}, `
       + `llegó "${question.reformulationType}"`,
+    );
+  }
+
+  if (expectedType && question.reformulationType !== expectedType) {
+    throw new Error(
+      `reformulation: se pidió el tipo "${expectedType}" pero el modelo generó "${question.reformulationType}"`,
     );
   }
 

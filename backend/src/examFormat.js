@@ -44,6 +44,7 @@ export const CONFIG = {
   piloteCount: 4,
   reformulationOverlapThreshold: 0.75,  // por encima de esto, la opción correcta calca el audio
   reformulationMinTrapWords: 2,        // mínimo de palabras literales compartidas para contar como trampa
+  drillReformulationOverlapThreshold: 0.5,  // umbral más estricto, solo para drill_paraphrase
 };
 
 // ±2 fijo sería absurdamente estrecho para una interview de 200-300 palabras.

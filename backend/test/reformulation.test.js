@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { checkReformulation, findLiteralTrapOptionIds } from '../src/validation/reformulation.js';
+import { checkReformulation, findLiteralTrapOptionIds, REFORMULATION_TYPES } from '../src/validation/reformulation.js';
 import { CONFIG } from '../src/examFormat.js';
 
 function preguntaBase(overrides = {}) {
@@ -97,4 +97,27 @@ test('checkReformulation marca con literalTrap las opciones calificantes y deja 
   assert.equal(porId.C.literalTrap, undefined);
   assert.equal(porId.D.literalTrap, undefined);
   assert.deepEqual(Object.keys(pregunta.reformulation).sort(), ['extrait_audio', 'option_correcte', 'type']);
+});
+
+test('REFORMULATION_TYPES está exportado con los 3 valores válidos', () => {
+  assert.deepEqual(REFORMULATION_TYPES, ['nominalisation', 'synonyme', 'restructuration']);
+});
+
+test('checkReformulation acepta cuando expectedType coincide con reformulationType', () => {
+  const pregunta = preguntaBase({ reformulationType: 'nominalisation' });
+  assert.doesNotThrow(() => checkReformulation(pregunta, TRANSCRIPT, CONFIG, { expectedType: 'nominalisation' }));
+});
+
+test('checkReformulation rechaza cuando expectedType no coincide con reformulationType', () => {
+  const pregunta = preguntaBase({ reformulationType: 'nominalisation' });
+  assert.throws(
+    () => checkReformulation(pregunta, TRANSCRIPT, CONFIG, { expectedType: 'synonyme' }),
+    /se pidió el tipo "synonyme" pero el modelo generó "nominalisation"/,
+  );
+});
+
+test('checkReformulation es un no-op de tipo cuando no se pasa expectedType', () => {
+  const pregunta = preguntaBase();
+  assert.doesNotThrow(() => checkReformulation(pregunta, TRANSCRIPT, CONFIG));
+  assert.doesNotThrow(() => checkReformulation(preguntaBase(), TRANSCRIPT, CONFIG, {}));
 });

@@ -92,4 +92,5 @@ test('CONFIG expone los parámetros calibrables con sus defaults', () => {
   assert.equal(CONFIG.piloteCount, 4);
   assert.equal(CONFIG.reformulationOverlapThreshold, 0.75);
   assert.equal(CONFIG.reformulationMinTrapWords, 2);
+  assert.equal(CONFIG.drillReformulationOverlapThreshold, 0.5);
 });
