@@ -15,46 +15,86 @@ Extiende `frontend/src/exam/ExamReview.jsx` (pantalla de repaso post-examen sin 
 - Sets generados antes de la Parte A: no tienen el campo `reformulation` en absoluto.
 - Preguntas correctas: el puente solo aplica a preguntas falladas (incluye "sin respuesta", que ya cuenta como fallada en `reviewModel.js`).
 
-## 1. Extensión del backend: `trap_option_ids`
+## 1. Extensión del backend: marcar la opción, no una lista de ids
 
-`checkReformulation` (`backend/src/validation/reformulation.js`) ya calcula, para decidir aprobar/rechazar el ítem, qué opciones (además de la correcta) comparten suficientes palabras de contenido literal con el transcript completo — hoy ese cálculo se colapsa en un booleano (`hayTrampaLiteral`) usado solo para el pass/fail, sin registrar cuáles opciones calificaron.
+**Restricción crítica descubierta en revisión de diseño:** `checkReformulation` corre dentro de `validateItem`, y `validateItem` se ejecuta **antes** de `aleatorizarOpciones` en `itemGenerator.js`'s `generateItem()`. `aleatorizarOpciones` baraja `question.options` y renumera A-D, remapeando `correctId` buscando el texto de la opción original — pero cualquier estructura que identifique una opción **por su letra original** (p. ej. un array `trap_option_ids: ["C"]` guardado antes del barajado) quedaría con letras obsoletas después: la letra "C" pre-barajado ya no corresponde a la misma opción una vez reordenada. Esto habría hecho que la advertencia de la sección 2 no apareciera cuando correspondía, apareciera para la opción equivocada, o variara de forma efectivamente aleatoria entre generaciones — un bug real, no hipotético.
 
-Cambio: en vez de `.some(...)`, calcular la lista completa de ids que califican (normalmente será 1, pero puede haber más de un distractor con suficiente reciclaje literal — capturarlos todos es más preciso que quedarse solo con "el primero encontrado"). El umbral de rechazo no cambia: sigue siendo "rechaza si la lista queda vacía" (`trapOptionIds.length === 0`), exactamente la misma condición que hoy expresa `!hayTrampaLiteral`.
+Los campos existentes de `reformulation` (`extrait_audio`, `option_correcte`, `type`) no tienen este problema porque son texto/transcript, nunca letras — por eso sobreviven el barajado sin ajuste (ya probado en `itemGenerator.test.js`). Un identificador basado en letra necesita el tratamiento contrario.
 
-Al pasar la validación, la metadata que ya se adjunta gana un campo:
+**Solución: marcar la opción misma, no una lista aparte.** `aleatorizarOpciones` ya copia cada opción con `{ ...option, id: nuevaLetra }` — cualquier propiedad adicional que ya traiga la opción viaja automáticamente con ella, sin importar que la letra cambie. Entonces:
+
+1. Nueva función pura exportada, `findLiteralTrapOptionIds(question, transcript, config)` en `backend/src/validation/reformulation.js` — extrae el cálculo que hoy vive inline como `hayTrampaLiteral`, sin cambiar el umbral (`config.reformulationMinTrapWords`) ni la condición de rechazo (rechaza cuando el array resultante queda vacío). Devuelve el array completo de ids que califican (normalmente 1, pero puede haber más de un distractor con suficiente reciclaje literal).
+2. `checkReformulation` llama a esta función; si el array queda vacío, rechaza exactamente como hoy. Si no, antes de adjuntar `question.reformulation`, marca cada opción calificante en `question.options` con `literalTrap: true` (las que no califican quedan sin la propiedad — ausente, no `false`, mismo principio de "ausencia = no aplica" que ya usa el resto del diseño).
+3. `question.reformulation` **no gana ningún campo nuevo** — se queda exactamente como en la Parte A (`extrait_audio`, `option_correcte`, `type`). La marca vive en la opción, no en la metadata de reformulación.
 
 ```js
-question.reformulation = {
-  extrait_audio: question.justification,
-  option_correcte: correctOption.text,
-  type: question.reformulationType,
-  trap_option_ids: trapOptionIds, // ej. ["C"] — nuevo
-};
+export function findLiteralTrapOptionIds(question, transcript, config) {
+  const palabrasTranscript = new Set(contentWords(transcript));
+  return question.options
+    .filter(option => option.id !== question.correctId)
+    .filter(option => contentWords(option.text)
+      .filter(palabra => palabrasTranscript.has(palabra)).length >= config.reformulationMinTrapWords)
+    .map(option => option.id);
+}
 ```
 
-Esto no cambia ningún umbral, no re-abre ninguna decisión de calibración de la Parte A, y no afecta a ningún set ya generado (los que ya existen simplemente no tienen `trap_option_ids`, ver compatibilidad).
+Dentro de `checkReformulation`, tras las comprobaciones existentes y antes de asignar `question.reformulation`:
 
-## 2. Renderizado en `ExamReview.jsx`
+```js
+const trapIds = findLiteralTrapOptionIds(question, transcript, config);
+if (trapIds.length === 0) throw new Error(/* mismo mensaje que hoy */);
+// ...chequeo de reformulationType sin cambios...
+for (const option of question.options) {
+  if (trapIds.includes(option.id)) option.literalTrap = true;
+}
+```
 
-Dentro del bloque por pregunta ya existente (`ExamReview.jsx`, dentro del `.map` de `item.questions`, después de la lista de opciones y antes del párrafo de `feedback`, hoy alrededor de la línea 265), se agrega un bloque condicionado a `!question.isCorrect && setQuestion.reformulation`:
+Esto no cambia ningún umbral de calibración de la Parte A, no reabre ninguna decisión ya tomada ahí, y no afecta a ningún set ya generado (los que ya existen simplemente no tienen `literalTrap` en ninguna opción, ver compatibilidad).
 
-- **"Lo que dice el audio:"** — cita textual de `setQuestion.reformulation.extrait_audio`.
-- **"Respuesta correcta ({tipo en español}):"** — `setQuestion.reformulation.option_correcte`, con el tipo traducido vía una constante nueva `REFORMULATION_TYPE_LABELS` (`nominalisation` → "Nominalización", `synonyme` → "Sinónimo", `restructuration` → "Reestructuración"), siguiendo el mismo patrón ya usado por `SECTION_LABELS` en el mismo archivo.
-- Si `setQuestion.reformulation.trap_option_ids` (tratado como `[]` si viene ausente — ver compatibilidad) incluye `question.selectedId`: una línea de advertencia explícita, ej. *"Elegiste una opción que reutilizaba palabras literales del audio, pero con un sentido distinto."*
+## 2. Decisión en `reviewModel.js`, renderizado en `ExamReview.jsx`
+
+**Cambio de enfoque respecto al borrador anterior:** originalmente esta lógica iba como JSX inline en `ExamReview.jsx`, sin tocar `reviewModel.js`, con el razonamiento de que era "una comparación trivial". Revisión de diseño correcta: `reviewModel.js` existe precisamente porque este proyecto separa deliberadamente las decisiones de corrección/estado (puras, testeadas) del renderizado (JSX, solo verificado por navegador) — es la arquitectura ya documentada para toda la pantalla de repaso. Además, una vez que se agregan las guardas defensivas de la sección de compatibilidad (abajo), la lógica deja de ser un one-liner: vale la pena que viva en la capa que ya se testea unitariamente, no en el componente.
+
+`buildReviewModel(set, answers)` ya recibe el `set` completo (con `question.reformulation` y `question.options[].literalTrap` disponibles) y ya construye el objeto por pregunta `{ questionIndex, selectedId, correctId, answered, isCorrect }`. Ese objeto gana dos campos:
+
+```js
+{
+  // ...campos existentes sin cambios...
+  reformulation: null | { extrait_audio: string, option_correcte: string, type: string },
+  selectedLiteralTrap: boolean,
+}
+```
+
+Reglas de construcción (todas puras, todas testeables sin DOM):
+- `reformulation` es `null` salvo que `question.reformulation` exista Y `extrait_audio`/`option_correcte` sean strings no vacíos Y `type` sea uno de los 3 valores válidos (`nominalisation`/`synonyme`/`restructuration`) — cualquier otra combinación (campo ausente, string vacío, tipo desconocido) se trata como "no hay puente que mostrar", nunca como un bloque a medio llenar. En la práctica `type` siempre es válido cuando `reformulation` existe (la Parte A ya lo valida antes de adjuntar el campo), pero el modelo no confía en esa garantía externa — la revalida.
+- `selectedLiteralTrap` es `true` solo si la pregunta fue respondida (`answered`) Y la opción con `id === selectedId` tiene `literalTrap === true`. Sin respuesta → siempre `false` (no hay opción elegida que pueda ser la trampa).
+
+`ExamReview.jsx` consume esto de forma trivial: dentro del bloque por pregunta ya existente (después de la lista de opciones, antes del párrafo de `feedback`, hoy alrededor de la línea 265), un bloque condicionado a `!question.isCorrect && question.reformulation`:
+
+- **"Lo que dice el audio:"** — cita textual de `question.reformulation.extrait_audio`.
+- **"Respuesta correcta ({tipo en español}):"** — `question.reformulation.option_correcte`, con el tipo traducido vía una constante nueva `REFORMULATION_TYPE_LABELS` (`nominalisation` → "Nominalización", `synonyme` → "Sinónimo", `restructuration` → "Reestructuración", con fallback `?? 'Reformulación'` por si acaso), siguiendo el mismo patrón ya usado por `SECTION_LABELS` en el mismo archivo — la traducción de la etiqueta es presentación, se queda en el componente, igual que `SECTION_LABELS` hoy.
+- Si `question.selectedLiteralTrap`: una línea de advertencia.
+
+**Redacción de la advertencia — corregida para no afirmar más de lo que el algoritmo valida.** El chequeo de `literalTrap` solo mide solapamiento léxico (≥2 palabras de contenido compartidas con el transcript completo, ver `reformulation.js`), no una diferencia de sentido confirmada — el propio código ya documenta que en transcripts largos casi cualquier distractor puede superar el umbral por coincidencia. El borrador anterior decía *"...pero con un sentido distinto"*, afirmando algo que no se validó. Redacción corregida:
+
+> "Elegiste una opción que comparte palabras literales con el audio. Esto puede ser una trampa de reconocimiento superficial — compara el sentido completo, no solo las palabras, con la respuesta correcta."
 
 Todo el texto del puente es en español, coherente con el resto de `ExamReview.jsx` (a diferencia de `ExamRunner.jsx`, cuyo chrome es en francés durante el examen cronometrado) — el fragmento de audio y el texto de la opción correcta se muestran tal cual (en francés, porque son contenido real del examen), pero las etiquetas y explicaciones que los rodean son en español.
 
-Esta lógica queda como JSX inline dentro de `ExamReview.jsx`, sin extraer un módulo puro nuevo ni tocar `reviewModel.js`: el chequeo (`!isCorrect`, presencia de `reformulation`, pertenencia a `trap_option_ids`) es una comparación trivial sobre datos que el componente ya tiene disponibles (`question` del modelo de repaso, `setQuestion` del set crudo), y sigue el mismo patrón ya usado en el archivo para el etiquetado de corrección de las opciones (líneas 217-232, también JSX inline). `ExamReview.jsx` sigue siendo, como el resto de los componentes de UI del runner, verificado solo por navegador — no gana un archivo de test nuevo por este cambio.
+`ExamReview.jsx` sigue sin ganar un archivo de test nuevo (sigue siendo, como el resto de los componentes de UI del runner, verificado solo por navegador) — pero ahora la parte que sí importa verificar sin navegador (qué se decide mostrar, no cómo se pinta) vive en `reviewModel.js` y se testea ahí.
 
 ## 3. Compatibilidad hacia atrás
 
-Tres casos, todos degradando sin romper nada (ninguno lanza error ni muestra un puente vacío o roto):
+Cuatro casos, todos degradando sin romper nada (ninguno lanza error ni muestra un puente vacío o roto) — la validación vive en `reviewModel.js` (sección 2), no dispersa en el componente:
 
-1. **Sets de antes de la Parte A**: sin campo `reformulation` en absoluto → el bloque completo no se renderiza (la condición `setQuestion.reformulation` ya lo excluye).
+1. **Sets de antes de la Parte A**: sin campo `reformulation` en absoluto → `reformulation` del modelo queda `null`, el bloque completo no se renderiza.
 2. **`micro_trottoir` / `conversation_image`**: nunca tienen `reformulation` → mismo caso que (1).
-3. **Sets generados en la ventana entre el despliegue de la Parte A y el de este cambio** (si alguno llegó a generarse): tendrían `reformulation.{extrait_audio, option_correcte, type}` pero no `trap_option_ids` — se trata como `[]`, así que el puente muestra la comparación de audio/respuesta correcta con normalidad, simplemente nunca dispara la advertencia de trampa (no hay forma de saber retroactivamente qué opción habría calificado sin volver a validar el ítem, y no es necesario: perder la advertencia en ese puñado de ítems intermedios es aceptable, perder el resto del puente no lo sería).
+3. **Metadata parcial o corrupta** (`extrait_audio`/`option_correcte` ausentes o vacíos, o `type` fuera de los 3 valores válidos): `reviewModel.js` lo trata como (1) — nunca se muestra un bloque a medias.
+4. **Ninguna opción con `literalTrap: true`** (sets generados antes de este cambio, con `reformulation` de la Parte A pero sin la marca nueva en ninguna opción): `selectedLiteralTrap` es `false` incondicionalmente, así que el puente muestra la comparación de audio/respuesta correcta con normalidad, simplemente nunca dispara la advertencia de trampa. Perder la advertencia en ese puñado de ítems intermedios es aceptable; perder el resto del puente no lo sería.
 
 ## Testing
 
-- Backend: `backend/test/reformulation.test.js` gana casos para `trap_option_ids` — que capture exactamente los ids que califican (incluyendo el caso de más de un distractor calificando a la vez), que quede vacío cuando ninguno califica (mismo caso que ya dispara el rechazo existente, verificar que el rechazo sigue ocurriendo antes de que el array importe), y que el resto de `reformulation` (`extrait_audio`, `option_correcte`, `type`) no cambie de forma.
-- Frontend: sin test unitario nuevo, verificación solo por navegador (correr un examen real hasta review, fallar deliberadamente una pregunta de una sección con `reformulation` para confirmar que el puente aparece con el texto correcto, incluyendo el caso donde la opción elegida es la trampa) — coherente con que `ExamReview.jsx` ya es browser-only hoy.
+- Backend (`backend/test/reformulation.test.js`): casos para `findLiteralTrapOptionIds` en aislamiento — devuelve exactamente los ids que califican (incluyendo el caso de más de un distractor calificando a la vez), devuelve `[]` cuando ninguno califica (ahora sí observable directamente, sin depender de que `checkReformulation` rechace primero). Casos para `checkReformulation`: las opciones calificantes quedan marcadas con `literalTrap: true`, las que no califican no tienen la propiedad, y `question.reformulation` mantiene exactamente su forma de la Parte A (sin campos nuevos).
+- Backend, integración post-barajado (`backend/test/itemGenerator.test.js`), obligatorio dado el bug que motivó este rediseño: un ítem con un distractor que califica como trampa, verificar que **después** de `aleatorizarOpciones` (a) `correctId` sigue apuntando al texto de la respuesta correcta, (b) la opción con `literalTrap: true` sigue siendo la que originalmente compartía las palabras literales (identificable por texto, ya que el id cambió), (c) la opción correcta nunca queda marcada con `literalTrap: true`, y (d) el caso de dos distractores calificando simultáneamente también sobrevive el barajado con ambas marcas intactas.
+- Frontend, `reviewModel.js` (`frontend/src/exam/reviewModel.test.js`): pregunta incorrecta con `reformulation` completa → bloque presente; pregunta correcta → `reformulation: null` sin importar la metadata cruda; sin respuesta → `reformulation` presente si aplica pero `selectedLiteralTrap: false` siempre; set antiguo sin `reformulation` → `null`; `reformulation` con `type` inválido o `extrait_audio`/`option_correcte` vacíos → `null`; opción incorrecta elegida que NO es la trampa → `selectedLiteralTrap: false`; opción incorrecta elegida que SÍ es la trampa → `selectedLiteralTrap: true`.
+- Frontend, `ExamReview.jsx`: sin test unitario nuevo, verificación solo por navegador (correr un examen real hasta review, fallar deliberadamente una pregunta de una sección con `reformulation` para confirmar que el puente aparece con el texto correcto, incluyendo el caso donde la opción elegida es la trampa) — coherente con que el componente ya es browser-only hoy; la cobertura real de casos borde vive en los tests de `reviewModel.js`, no aquí.
