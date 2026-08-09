@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { app, aplanarItem, temaAleatorioParaSeccion } from '../server.js';
 import { TOPICS } from '../src/topics/catalog.js';
+import { REFORMULATION_TYPES } from '../src/validation/reformulation.js';
 
 test('aplana el ítem nuevo a la forma que espera el frontend de entrenamiento', () => {
   const item = {
@@ -129,5 +130,34 @@ test('GET /api/generate-question rechaza un provider desconocido con 400', async
   await conServidor(async (base) => {
     const res = await fetch(`${base}/api/generate-question?provider=noexiste`);
     assert.equal(res.status, 400);
+  });
+});
+
+test('POST /api/sets/generate rechaza un typeFilter inválido con 400', async () => {
+  await conServidor(async (base) => {
+    const res = await fetch(`${base}/api/sets/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ format: 'SET_DRILL_PARAPHRASE', typeFilter: 'no-existe' }),
+    });
+    assert.equal(res.status, 400);
+    const data = await res.json();
+    assert.match(data.error, new RegExp(REFORMULATION_TYPES.join('|')));
+  });
+});
+
+test('GET /api/sets sin ?format= excluye SET_DRILL_PARAPHRASE (solo formatos de examen)', async () => {
+  await conServidor(async (base) => {
+    const res = await fetch(`${base}/api/sets`);
+    const data = await res.json();
+    assert.ok(data.every(set => set.format === 'SET_STANDARD_36' || set.format === 'SET_STANDARD_40'));
+  });
+});
+
+test('GET /api/sets?format=SET_DRILL_PARAPHRASE excluye los formatos de examen', async () => {
+  await conServidor(async (base) => {
+    const res = await fetch(`${base}/api/sets?format=SET_DRILL_PARAPHRASE`);
+    const data = await res.json();
+    assert.ok(data.every(set => set.format === 'SET_DRILL_PARAPHRASE'));
   });
 });

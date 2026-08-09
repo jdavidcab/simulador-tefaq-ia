@@ -9,6 +9,7 @@ import { createPipeline } from './src/sets/pipeline.js';
 import { listSets, readSet, deleteSet, audioDir, imagesDir } from './src/sets/store.js';
 import { VALID_DIFFICULTIES } from './src/prompt/profiles.js';
 import { TOPICS } from './src/topics/catalog.js';
+import { REFORMULATION_TYPES } from './src/validation/reformulation.js';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -313,12 +314,17 @@ app.post('/api/sets/generate', async (req, res) => {
   if (difficulty && !VALID_DIFFICULTIES.includes(difficulty)) {
     return res.status(400).json({ error: `Dificultad inválida: "${difficulty}". Válidas: ${VALID_DIFFICULTIES.join(', ')}` });
   }
+  const typeFilter = req.body?.typeFilter;
+  if (typeFilter && !REFORMULATION_TYPES.includes(typeFilter)) {
+    return res.status(400).json({ error: `typeFilter inválido: "${typeFilter}". Válidos: ${REFORMULATION_TYPES.join(', ')}` });
+  }
   try {
     const set = await pipeline.createSet({
       difficulty,
       format: req.body?.format,
       pilotes: Boolean(req.body?.pilotes),
       seed: req.body?.seed,
+      typeFilter,
     });
     res.status(201).json({ id: set.id, total: set.plan.length, statut: set.statut });
     // Arranca en background: el disco ya tiene el esqueleto completo.
@@ -345,9 +351,16 @@ app.post('/api/sets/:id/resume', async (req, res) => {
   }
 });
 
-app.get('/api/sets', async (_req, res) => {
+const FORMATOS_EXAMEN = ['SET_STANDARD_36', 'SET_STANDARD_40'];
+
+app.get('/api/sets', async (req, res) => {
   try {
-    res.json(await listSets(DATA_DIR));
+    const sets = await listSets(DATA_DIR);
+    const formato = req.query.format;
+    const filtrados = formato
+      ? sets.filter(set => set.format === formato)
+      : sets.filter(set => FORMATOS_EXAMEN.includes(set.format));
+    res.json(filtrados);
   } catch (error) {
     res.status(error.status ?? 500).json({ error: error.message });
   }
