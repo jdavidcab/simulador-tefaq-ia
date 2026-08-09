@@ -26,6 +26,7 @@ const DrillRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
   const watchdogRef = useRef(null);
   const firedRef = useRef(false);
   const [remaining, setRemaining] = useState(0);
+  const [audioCurrentTime, setAudioCurrentTime] = useState(0);
 
   const section = set.sections[state.sectionIndex];
   const item = section?.items?.[state.itemIndex];
@@ -110,8 +111,13 @@ const DrillRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
       clearWatchdog();
       dispatch({ type: 'AUDIO_ENDED', token: currentToken(stateRef.current) });
     };
+    const onTimeUpdate = () => setAudioCurrentTime(audioEl.currentTime);
     audioEl.addEventListener('ended', onEnded);
-    return () => audioEl.removeEventListener('ended', onEnded);
+    audioEl.addEventListener('timeupdate', onTimeUpdate);
+    return () => {
+      audioEl.removeEventListener('ended', onEnded);
+      audioEl.removeEventListener('timeupdate', onTimeUpdate);
+    };
   }, [audioElRef, clearWatchdog]);
 
   useEffect(() => {
@@ -153,14 +159,29 @@ const DrillRunner = ({ set, audioElRef, audioUrls, onComplete, onAbandon }) => {
   } else {
     const questions = item.questions;
     const itemAnswers = state.answers[section.type]?.[item.ref] ?? {};
+    const totalAudioSeconds = item.duree_audio_s;
+    let elapsedAudioSeconds = 0;
+    if (state.phase === 'audio-playing') {
+      elapsedAudioSeconds = audioCurrentTime;
+    } else if (state.phase === 'apres') {
+      elapsedAudioSeconds = totalAudioSeconds;
+    }
+    // El contador y la barra de audio quedan siempre montados (nunca
+    // condicionados por fase) para que las opciones de abajo no salten de
+    // posición al aparecer/desaparecer estos elementos entre fases.
+    const displayRemaining = (state.phase === 'audio-pending' || state.phase === 'audio-playing') ? 0 : remaining;
     body = (
       <div className="space-y-6">
         {state.phase === 'audio-pending' && <p className="text-center text-blue-600 text-sm">Preparando audio...</p>}
-        {(state.phase === 'avant' || state.phase === 'apres') && (
-          <div className="text-center text-3xl font-mono text-red-600">
-            00:{remaining.toString().padStart(2, '0')}
-          </div>
-        )}
+        <div className="text-center text-3xl font-mono text-red-600">
+          00:{displayRemaining.toString().padStart(2, '0')}
+        </div>
+        <div className="relative h-[10px] bg-gray-300 rounded overflow-hidden">
+          <div
+            className="absolute inset-y-0 left-0 bg-blue-500"
+            style={{ width: `${totalAudioSeconds > 0 ? Math.min(100, (elapsedAudioSeconds / totalAudioSeconds) * 100) : 0}%` }}
+          />
+        </div>
         {questions.map((question, questionIndex) => (
           <div key={`${item.ref}-${questionIndex}`}>
             <h3 className="font-bold text-black mb-3">{question.prompt}</h3>
