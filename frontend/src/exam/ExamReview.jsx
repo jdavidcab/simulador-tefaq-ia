@@ -16,6 +16,12 @@ const SECTION_LABELS = {
   divers: 'Diversos',
 };
 
+const REFORMULATION_TYPE_LABELS = {
+  nominalisation: 'Nominalización',
+  synonyme: 'Sinónimo',
+  restructuration: 'Reestructuración',
+};
+
 const HIGHLIGHT_COLORS = ['bg-yellow-200', 'bg-sky-200', 'bg-pink-200'];
 
 const TranscriptWithHighlights = ({ transcript, questions }) => {
@@ -262,6 +268,24 @@ const ExamReview = ({ set, answers, audioElRef, audioUrls, onBackToSummary, onEx
                               );
                             })}
                           </div>
+                          {question.reformulation && (
+                            <div className="bg-indigo-50 border border-indigo-200 rounded p-3 text-sm space-y-1">
+                              <p>
+                                <span className="font-semibold">Lo que dice el audio:</span> «{question.reformulation.extrait_audio}»
+                              </p>
+                              <p>
+                                <span className="font-semibold">
+                                  Respuesta correcta ({REFORMULATION_TYPE_LABELS[question.reformulation.type] ?? 'Reformulación'}):
+                                </span> {question.reformulation.option_correcte}
+                              </p>
+                              {question.selectedLiteralTrap && (
+                                <p className="text-amber-800 font-semibold">
+                                  Elegiste una opción que comparte palabras literales con el audio. Esto puede ser una trampa de
+                                  reconocimiento superficial — compara el sentido completo, no solo las palabras, con la respuesta correcta.
+                                </p>
+                              )}
+                            </div>
+                          )}
                           <p className="text-sm text-gray-700">{setQuestion.feedback}</p>
                         </div>
                       );
