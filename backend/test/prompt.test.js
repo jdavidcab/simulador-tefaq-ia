@@ -137,3 +137,34 @@ test('las 6 secciones de opciones generadas exigen nominalización y la trampa l
     assert.match(prompt, /trampa de reconocimiento superficial/i, `${sectionType} debería exigir la trampa literal`);
   }
 });
+
+test('drill_paraphrase fuerza 15-40 palabras sin importar lo que llegue en ctx', () => {
+  const prompt = buildSectionPrompt('drill_paraphrase', { ...BASE, minWords: 999, maxWords: 999 });
+  assert.ok(prompt.includes('entre 15 y 40 palabras'));
+  assert.ok(!prompt.includes('999'));
+});
+
+test('drill_paraphrase sin filtro de tipo no menciona una transformación forzada', () => {
+  const prompt = buildSectionPrompt('drill_paraphrase', BASE);
+  assert.ok(!/específicamente/i.test(prompt));
+});
+
+test('drill_paraphrase con filtro de tipo inyecta la instrucción forzada correspondiente', () => {
+  const conNominalizacion = buildSectionPrompt('drill_paraphrase', { ...BASE, expectedReformulationType: 'nominalisation' });
+  assert.match(conNominalizacion, /específicamente una NOMINALIZACIÓN/);
+
+  const conSinonimo = buildSectionPrompt('drill_paraphrase', { ...BASE, expectedReformulationType: 'synonyme' });
+  assert.match(conSinonimo, /específicamente un SINÓNIMO/);
+
+  const conRestructuracion = buildSectionPrompt('drill_paraphrase', { ...BASE, expectedReformulationType: 'restructuration' });
+  assert.match(conRestructuracion, /específicamente una RESTRUCTURACIÓN/);
+});
+
+test('drill_paraphrase hereda la regla de reformulación y la trampa literal como las demás 6 secciones', () => {
+  const prompt = buildSectionPrompt('drill_paraphrase', BASE);
+  assert.match(prompt, /nominalisation/i);
+  assert.match(prompt, /trampa de reconocimiento superficial/i);
+  assert.ok(prompt.includes('reformulationType'));
+  assert.ok(prompt.includes('justification'));
+  assert.ok(prompt.includes('"questions"'));
+});

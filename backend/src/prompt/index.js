@@ -8,9 +8,10 @@ import { build as chronique } from './sections/chronique.js';
 import { build as interview } from './sections/interview.js';
 import { build as reportage } from './sections/reportage.js';
 import { build as divers } from './sections/divers.js';
+import { build as drill_paraphrase } from './sections/drill_paraphrase.js';
 
 const CONSTRUCTORES = {
-  conversation_image, annonce_publique, repondeur, micro_trottoir, chronique, interview, reportage, divers,
+  conversation_image, annonce_publique, repondeur, micro_trottoir, chronique, interview, reportage, divers, drill_paraphrase,
 };
 
 export function buildSectionPrompt(sectionType, opts = {}) {
@@ -29,5 +30,6 @@ export function buildSectionPrompt(sectionType, opts = {}) {
     maxWords: opts.maxWords ?? preset.maxWords,
     questionsPerAudio: preset.questionsPerAudio,
     verticalScan: Boolean(opts.verticalScan),
+    expectedReformulationType: opts.expectedReformulationType,
   });
 }
