@@ -64,3 +64,11 @@ test('topicsForSection filtra por etiqueta', () => {
 test('topicById devuelve undefined para ids inexistentes', () => {
   assert.equal(topicById('t-999999'), undefined);
 });
+
+test('topicsForSection("drill_paraphrase") usa el mismo pool que divers, sin etiquetar temas nuevos', () => {
+  const divers = topicsForSection('divers');
+  const drill = topicsForSection('drill_paraphrase');
+  assert.deepEqual(drill.map(t => t.id).sort(), divers.map(t => t.id).sort());
+  assert.ok(drill.length >= 48, `pool de drill_paraphrase (${drill.length}) por debajo del mínimo 48 (demanda 12 x ventana+1)`);
+  assert.ok(!TOPICS.some(t => t.sections.includes('drill_paraphrase')), 'ningún tema debe etiquetarse literalmente drill_paraphrase');
+});

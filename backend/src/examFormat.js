@@ -9,6 +9,7 @@ export const SECTION_PRESETS = {
   interview:          { bloc: 3, questions: 6,  avant: 20, apres: 30, questionsPerAudio: 2, minWords: 200, maxWords: 300, lectures: 1 },
   reportage:          { bloc: 3, questions: 2,  avant: 10, apres: 15, questionsPerAudio: 2, minWords: 150, maxWords: 220, lectures: 1 },
   divers:             { bloc: 4, questions: 10, avant: 10, apres: 15, questionsPerAudio: 1, minWords: 60,  maxWords: 120, lectures: 1 },
+  drill_paraphrase:   { bloc: 0,  questions: 12, avant: 5,  apres: 10, questionsPerAudio: 1, minWords: 15,  maxWords: 40,  lectures: 1 },
 };
 
 // Las 7 secciones que comparten la ruta genérica de generación (texto ->
@@ -23,6 +24,7 @@ export const GENERABLE_SECTIONS = [
 export const SET_COMPOSITIONS = {
   SET_STANDARD_36: [...GENERABLE_SECTIONS],
   SET_STANDARD_40: ['conversation_image', ...GENERABLE_SECTIONS],
+  SET_DRILL_PARAPHRASE: ['drill_paraphrase'],
 };
 
 // Los ítems pilote deben aportar exactamente 1 pregunta cada uno para que

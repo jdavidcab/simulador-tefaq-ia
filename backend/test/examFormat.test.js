@@ -5,9 +5,9 @@ import {
   MICRO_TROTTOIR_POSTURES, CONFIG, wordTolerance, itemsPerSection, sectionDemand, totalQuestions,
 } from '../src/examFormat.js';
 
-test('los 8 tipos de sección están declarados', () => {
+test('los 9 tipos de sección están declarados', () => {
   assert.deepEqual(Object.keys(SECTION_PRESETS).sort(), [
-    'annonce_publique', 'chronique', 'conversation_image', 'divers',
+    'annonce_publique', 'chronique', 'conversation_image', 'divers', 'drill_paraphrase',
     'interview', 'micro_trottoir', 'repondeur', 'reportage',
   ]);
 });
@@ -93,4 +93,17 @@ test('CONFIG expone los parámetros calibrables con sus defaults', () => {
   assert.equal(CONFIG.reformulationOverlapThreshold, 0.75);
   assert.equal(CONFIG.reformulationMinTrapWords, 2);
   assert.equal(CONFIG.drillReformulationOverlapThreshold, 0.5);
+});
+
+test('drill_paraphrase no se agrega a GENERABLE_SECTIONS ni cambia SET_STANDARD_36/40', () => {
+  assert.ok(!GENERABLE_SECTIONS.includes('drill_paraphrase'));
+  assert.equal(GENERABLE_SECTIONS.length, 7);
+  assert.equal(totalQuestions('SET_STANDARD_36'), 36);
+  assert.equal(totalQuestions('SET_STANDARD_40'), 40);
+});
+
+test('SET_DRILL_PARAPHRASE es una composición de un solo tipo con 12 preguntas', () => {
+  assert.deepEqual(SET_COMPOSITIONS.SET_DRILL_PARAPHRASE, ['drill_paraphrase']);
+  assert.equal(totalQuestions('SET_DRILL_PARAPHRASE'), 12);
+  assert.deepEqual(sectionDemand('SET_DRILL_PARAPHRASE'), { drill_paraphrase: 12 });
 });

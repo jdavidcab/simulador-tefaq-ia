@@ -177,7 +177,13 @@ export const TOPICS = [
 ];
 
 export function topicsForSection(sectionType, catalog = TOPICS) {
-  return catalog.filter(topic => topic.sections.includes(sectionType));
+  // drill_paraphrase no tiene temas propios etiquetados en el catálogo --
+  // usa el mismo pool que divers (el más amplio) sin tocar los datos, para
+  // no romper el test que exige que todo tag en topic.sections pertenezca
+  // a GENERABLE_SECTIONS (drill_paraphrase se excluye de esa constante a
+  // propósito, ver examFormat.js).
+  const efectivo = sectionType === 'drill_paraphrase' ? 'divers' : sectionType;
+  return catalog.filter(topic => topic.sections.includes(efectivo));
 }
 
 export function topicById(id, catalog = TOPICS) {
